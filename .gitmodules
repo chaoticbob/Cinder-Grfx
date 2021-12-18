@@ -1,0 +1,12 @@
+[submodule "third_party/VulkanMemoryAllocator"]
+	path = third_party/VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "third_party/glslang"]
+	path = third_party/glslang
+	url = https://github.com/chaoticbob/glslang.git
+[submodule "third_party/xxHash"]
+	path = third_party/xxHash
+	url = https://github.com/Cyan4973/xxHash.git
+[submodule "third_party/SPIRV-Reflect"]
+	path = third_party/SPIRV-Reflect
+	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
