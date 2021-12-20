@@ -8,41 +8,41 @@ using namespace ci;
 using namespace ci::app;
 namespace gl = ci::vk;
 
-class RotatingCubeApp : public App {
-  public:	
-	void	setup() override;
-	void	resize() override;
-	void	update() override;
-	void	draw() override;
-	
-	CameraPersp			mCam;
-	gl::BatchRef		mBatch;
-	gl::TextureRef		mTexture;
-	gl::GlslProgRef		mGlsl;
-	mat4				mCubeRotation;
+class RotatingCubeApp : public App
+{
+public:
+	void setup() override;
+	void resize() override;
+	void update() override;
+	void draw() override;
+
+	CameraPersp		mCam;
+	gl::BatchRef	mBatch;
+	gl::TextureRef	mTexture;
+	gl::GlslProgRef mGlsl;
+	mat4			mCubeRotation;
 };
 
 void RotatingCubeApp::setup()
 {
 	vk::Pipeline::Options options = vk::Pipeline::Options();
 
-
 	mCam.lookAt( vec3( 3, 2, 4 ), vec3( 0 ) );
-	
+
 	try {
 		mTexture = gl::Texture::create( loadImage( loadAsset( "texture.jpg" ) ), gl::Texture::Format().mipmap() );
 		mTexture->bind();
 		CI_LOG_I( "Loaded texture" );
 	}
-	catch( const std::exception& e ) {
+	catch ( const std::exception &e ) {
 		CI_LOG_E( "Texture Error: " << e.what() );
 	}
 
 	try {
-		mGlsl = gl::GlslProg::create(loadAsset("shader.vert"), loadAsset("shader.frag"));
+		mGlsl = gl::GlslProg::create( loadAsset( "shader.vert" ), loadAsset( "shader.frag" ) );
 		CI_LOG_I( "Loaded shader" );
 	}
-	catch( const std::exception& e ) {
+	catch ( const std::exception &e ) {
 		CI_LOG_E( "Shader Error: " << e.what() );
 	}
 
@@ -50,7 +50,7 @@ void RotatingCubeApp::setup()
 		mBatch = gl::Batch::create( geom::Cube(), mGlsl );
 		CI_LOG_I( "Created batch" );
 	}
-	catch( const std::exception& e ) {
+	catch ( const std::exception &e ) {
 		CI_LOG_E( "Shader Error: " << e.what() );
 	}
 
@@ -74,7 +74,7 @@ void RotatingCubeApp::update()
 
 void RotatingCubeApp::draw()
 {
-	gl::clear();
+	gl::clear( ColorA( 1, 0, 0, 1 ) );
 
 	gl::setMatrices( mCam );
 

@@ -44,6 +44,10 @@ public:
 
 	VkSemaphoreType getSemaphoreType() const { return mSemaphoreType; }
 
+	bool isBinary() const { return ( getSemaphoreType() == VK_SEMAPHORE_TYPE_BINARY ); }
+
+	bool isTimeline() const { return ( getSemaphoreType() == VK_SEMAPHORE_TYPE_TIMELINE ); }
+
 	VkSemaphore getSemaphoreHandle() const { return mSemaphoreHandle; }
 
 	void signal( uint64_t value );

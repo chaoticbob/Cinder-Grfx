@@ -102,13 +102,13 @@ private:
 
 	Options			 mOptions;
 	vk::DeviceRef	 mDevice;
-	vk::ContextRef   mContext;
+	vk::ContextRef	 mContext;
 	vk::SwapchainRef mSwapchain;
-	uint64_t		 mNumPreseents = 0;
 
 	struct Frame;
-	std::vector<Frame> mFrames;
-	Frame *			   mCurrentFrame = nullptr;
+	std::vector<Frame>		 mFrames;
+	vk::CountingSemaphoreRef mFrameSync;
+	vk::CommandPoolRef		 mCommandPool;
 
 	std::function<void( Renderer * )> mStartDrawFn;
 	std::function<void( Renderer * )> mFinishDrawFn;

@@ -15,7 +15,7 @@ Context *context();
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Command buffer functions
 
-CI_API void setRenderPass( const std::vector<const vk::ImageView*>& colorAttachments, const vk::ImageView* pDepthStencilAttachment = nullptr );
+//CI_API void setRenderPass( const std::vector<const vk::ImageView*>& colorAttachments, const vk::ImageView* pDepthStencilAttachment = nullptr );
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // OpenGL style functions

@@ -141,7 +141,7 @@ uint64_t Semaphore::getCounterValue() const
 		return 0;
 	}
 
-	uint64_t value = CINDER_INVALID_SEMAPHORE_VALUE;
+	uint64_t value = 0;
 	VkResult vkres = CI_VK_DEVICE_FN( GetSemaphoreCounterValue( getDeviceHandle(), mSemaphoreHandle, &value ) );
 	if ( vkres != VK_SUCCESS ) {
 		throw VulkanFnFailedExc( "vkGetSemaphoreCounterValue", vkres );

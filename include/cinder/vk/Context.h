@@ -13,8 +13,8 @@ class Context
 	: public vk::DeviceChildObject
 {
 private:
-	// If depth and stencil is combined, then depth resources
-	// and stencil resources are ignored.
+	//
+	// NOTE: Seperated depth/stencil is coming just not here yet.
 	//
 	struct Frame
 	{
@@ -33,13 +33,21 @@ public:
 	{
 		Options() {}
 
+		Options( VkFormat renderTargetFormat, VkFormat depthStencilFormat, uint32_t samples );
+
 		// clang-format off
 		Options &numInFlightFrames( uint32_t value ) { mNumInFlightFrames = std::max<uint32_t>( 1, value ); return *this; }
 		Options &setRenderTarget( VkFormat format ) { mRenderTargetFormat = format; return *this; }
 		Options &setDepthStencilFormat( VkFormat format ) { mDepthFormat = format; mStencilFormat = format; return *this; }
+		Options &addRenderTarget( VkFormat format ) { mAdditionalRenderTargets.push_back( format ); return *this; }
+		Options &sampleCount( uint32_t value );
+		// clang-format on
+
+	private:
+		// clang-format off
+		// Make these public when seperated depth/stencil has landed.		
 		Options &setDepthFormat( VkFormat format ) { mDepthFormat = format; return *this; }
 		Options &setStencilFormat( VkFormat format ) { mStencilFormat = format; return *this; }
-		Options &addRenderTarget( VkFormat format ) { mAdditionalRenderTargets.push_back( format ); return *this; }
 		// clang-format on
 
 	private:
@@ -53,6 +61,7 @@ public:
 		friend class Context;
 	};
 
+	/*
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	struct SemaphoreInfo
@@ -81,6 +90,46 @@ public:
 
 		friend class Context;
 	};
+*/
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	//struct SyncInfo
+	//{
+	//	struct SemaphoreInfo
+	//	{
+	//		vk::SemaphoreRef semaphore;
+	//		uint64_t		 value;
+	//	};
+	//
+	//	SyncInfo() {}
+	//
+	//	SyncInfo &addWait( vk::SemaphoreRef semaphore, uint64_t value )
+	//	{
+	//		mWaits.push_back( SemaphoreInfo{ semaphore, value } );
+	//		return *this;
+	//	}
+	//
+	//	SyncInfo &addSignal( vk::SemaphoreRef semaphore, uint64_t value )
+	//	{
+	//		mSignals.push_back( SemaphoreInfo{ semaphore, value } );
+	//		return *this;
+	//	}
+	//
+	//private:
+	//	std::vector<SemaphoreInfo> mWaits;
+	//	std::vector<SemaphoreInfo> mSignals;
+	//
+	//	friend class Context;
+	//};
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	struct SemaphoreInfo
+	{
+		vk::Semaphore *semaphore;
+		uint64_t	   value = 0;
+	};
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,13 +138,14 @@ public:
 	static ContextRef create( const Options &options = Options(), vk::DeviceRef device = vk::DeviceRef() );
 	static ContextRef create( uint32_t width, uint32_t height, const Options &options = Options(), vk::DeviceRef device = vk::DeviceRef() );
 
-	void			makeCurrent();
+	void			makeCurrent( const std::vector<SemaphoreInfo> &externalWaits = std::vector<SemaphoreInfo>() );
 	static Context *getCurrentContext();
-	void			submit( const SemaphoreList &waits = SemaphoreList(), const SemaphoreList &signals = SemaphoreList() );
+	void			submit( const std::vector<SemaphoreInfo> &waits, const std::vector<SemaphoreInfo> &signals );
 	void			waitForCompletion();
 
 	bool isRenderable() const { return ( mWidth > 0 ) && ( mHeight > 0 ); }
 
+	// Sets the clear value
 	void clearColor( const ColorA &color ) { mClearState.get().color = color; }
 	void clearDepth( const float depth ) { mClearState.get().depth = depth; }
 	void clearStencil( const int stencil ) { mClearState.get().stencil = static_cast<uint8_t>( stencil ); }
@@ -110,11 +160,15 @@ public:
 
 	vk::CommandBuffer *getCommandBuffer() const { return getCurrentFrame().commandBuffer.get(); }
 
+	uint32_t			 getFrameIndex() const { return mFrameIndex; }
 	uint32_t			 getNumRenderTargets() const { return countU32( mRenderTargetFormats ); }
 	const vk::ImageView *getRenderTargetView( uint32_t index ) const { return getCurrentFrame().rtvs[index].get(); }
 	const vk::ImageView *getDepthStencilView() const { return mCombinedDepthStencil ? getCurrentFrame().dtv.get() : nullptr; }
 	const vk::ImageView *getDepthTargetView() const { return getCurrentFrame().dtv.get(); }
 	const vk::ImageView *getStencilTargetView() const { return getCurrentFrame().stv.get(); }
+
+	void clearColorAttachment( uint32_t index );
+	void clearDepthStencilAttachment( VkImageAspectFlags aspectMask );
 
 private:
 	Context( vk::DeviceRef device, uint32_t width, uint32_t height, const Options &options );
@@ -200,8 +254,9 @@ private:
 
 	CommandPoolRef			 mCommandPool;
 	std::vector<Frame>		 mFrames;
-	uint64_t				 mFrameCount = 0;
-	uint32_t				 mFrameIndex = 0;
+	uint64_t				 mFrameCount		 = 0;
+	uint32_t				 mFrameIndex		 = 0;
+	uint32_t				 mPreviousFrameIndex = 0;
 	vk::CountingSemaphoreRef mFrameSyncSemaphore;
 
 	StateStack<ClearState>	 mClearState;

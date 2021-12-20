@@ -8,68 +8,68 @@ namespace cinder::vk {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CommandBuffer::RenderingInfo
 
-CommandBuffer::RenderingInfo::RenderingInfo( const vk::ImageView *pColorAttachment, const vk::ImageView *pDepthStencilAttachment )
+CommandBuffer::RenderingInfo::RenderingInfo( const vk::ImageViewRef &colorAttachment, const vk::ImageViewRef &depthStenciAttachment )
 {
-	if ( pColorAttachment != nullptr ) {
-		renderArea( pColorAttachment->getImageArea() );
+	if ( colorAttachment ) {
+		renderArea( colorAttachment->getImageArea() );
 	}
-	else if ( pDepthStencilAttachment != nullptr ) {
-		renderArea( pDepthStencilAttachment->getImageArea() );
+	else if ( depthStenciAttachment != nullptr ) {
+		renderArea( depthStenciAttachment->getImageArea() );
 	}
 }
 
-CommandBuffer::RenderingInfo::RenderingInfo( const std::vector<const vk::ImageView *> colorAttachments, const vk::ImageView *pDepthStencilAttachment )
+CommandBuffer::RenderingInfo::RenderingInfo( const std::vector<vk::ImageViewRef> &colorAttachments, const vk::ImageViewRef &depthStenciAttachment )
 {
 	if ( !colorAttachments.empty() ) {
 		renderArea( colorAttachments[0]->getImageArea() );
 	}
-	else if ( pDepthStencilAttachment != nullptr ) {
-		renderArea( pDepthStencilAttachment->getImageArea() );
+	else if ( depthStenciAttachment ) {
+		renderArea( depthStenciAttachment->getImageArea() );
 	}
 
 	for ( const auto &attachment : colorAttachments ) {
 		addColorAttachment( attachment );
 	}
 
-	if ( pDepthStencilAttachment != nullptr ) {
-		setDepthStencilAttachment( pDepthStencilAttachment );
+	if ( depthStenciAttachment ) {
+		setDepthStencilAttachment( depthStenciAttachment );
 	}
 }
 
-CommandBuffer::RenderingInfo::RenderingInfo( const std::vector<const vk::ImageView *> colorAttachments, const vk::ImageView *pDepthAttachment, const vk::ImageView *pStencilAttachment )
+CommandBuffer::RenderingInfo::RenderingInfo( const std::vector<vk::ImageViewRef> &colorAttachments, const vk::ImageViewRef &depthAttachment, const vk::ImageViewRef &stencilAttachment )
 {
 	if ( !colorAttachments.empty() ) {
 		renderArea( colorAttachments[0]->getImageArea() );
 	}
-	else if ( pDepthAttachment != nullptr ) {
-		renderArea( pDepthAttachment->getImageArea() );
+	else if ( depthAttachment ) {
+		renderArea( depthAttachment->getImageArea() );
 	}
-	else if ( pStencilAttachment != nullptr ) {
-		renderArea( pStencilAttachment->getImageArea() );
+	else if ( stencilAttachment ) {
+		renderArea( stencilAttachment->getImageArea() );
 	}
 
 	for ( const auto &attachment : colorAttachments ) {
 		addColorAttachment( attachment );
 	}
 
-	if ( pDepthAttachment != nullptr ) {
-		setDepthAttachment( pDepthAttachment );
+	if ( depthAttachment ) {
+		setDepthAttachment( depthAttachment );
 	}
 
-	if ( pStencilAttachment != nullptr ) {
-		setStencilAttachment( pDepthAttachment );
+	if ( stencilAttachment ) {
+		setStencilAttachment( stencilAttachment );
 	}
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::addColorAttachment( const vk::ImageView *pAttachment, const vk::ImageView *pResolve )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::addColorAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &resolve )
 {
 	VkRenderingAttachmentInfoKHR vkai = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR };
 	vkai.pNext						  = nullptr;
-	vkai.imageView					  = pAttachment->getImageViewHandle();
+	vkai.imageView					  = attachment->getImageViewHandle();
 	vkai.imageLayout				  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	vkai.resolveMode				  = ( pResolve != nullptr ) ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
-	vkai.resolveImageView			  = ( pResolve != nullptr ) ? pResolve->getImageViewHandle() : VK_NULL_HANDLE;
-	vkai.resolveImageLayout			  = ( pResolve != nullptr ) ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+	vkai.resolveMode				  = resolve != nullptr ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
+	vkai.resolveImageView			  = resolve != nullptr ? resolve->getImageViewHandle() : VK_NULL_HANDLE;
+	vkai.resolveImageLayout			  = resolve != nullptr ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
 	vkai.loadOp						  = VK_ATTACHMENT_LOAD_OP_LOAD;
 	vkai.storeOp					  = VK_ATTACHMENT_STORE_OP_STORE;
 	vkai.clearValue.color.float32[0]  = 0;
@@ -82,15 +82,15 @@ CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::addColorAttachment( 
 	return *this;
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::addColorAttachment( const vk::ImageView *pAttachment, const ColorA &clearValue, const vk::ImageView *pResolve )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::addColorAttachment( const vk::ImageViewRef &attachment, const ColorA &clearValue, const vk::ImageViewRef &resolve )
 {
 	VkRenderingAttachmentInfoKHR vkai = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR };
 	vkai.pNext						  = nullptr;
-	vkai.imageView					  = pAttachment->getImageViewHandle();
+	vkai.imageView					  = attachment->getImageViewHandle();
 	vkai.imageLayout				  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-	vkai.resolveMode				  = ( pResolve != nullptr ) ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
-	vkai.resolveImageView			  = ( pResolve != nullptr ) ? pResolve->getImageViewHandle() : VK_NULL_HANDLE;
-	vkai.resolveImageLayout			  = ( pResolve != nullptr ) ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
+	vkai.resolveMode				  = resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
+	vkai.resolveImageView			  = resolve ? resolve->getImageViewHandle() : VK_NULL_HANDLE;
+	vkai.resolveImageLayout			  = resolve ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_UNDEFINED;
 	vkai.loadOp						  = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	vkai.storeOp					  = VK_ATTACHMENT_STORE_OP_STORE;
 	vkai.clearValue.color.float32[0]  = clearValue.r;
@@ -103,14 +103,14 @@ CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::addColorAttachment( 
 	return *this;
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthAttachment( const vk::ImageView *pAttachment, const vk::ImageView *pResolve, VkImageLayout imageLayout )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &resolve, VkImageLayout imageLayout )
 {
 	mDepthAttachment.pNext						   = nullptr;
-	mDepthAttachment.imageView					   = pAttachment->getImageViewHandle();
+	mDepthAttachment.imageView					   = attachment->getImageViewHandle();
 	mDepthAttachment.imageLayout				   = imageLayout;
-	mDepthAttachment.resolveMode				   = ( pResolve != nullptr ) ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
-	mDepthAttachment.resolveImageView			   = ( pResolve != nullptr ) ? pResolve->getImageViewHandle() : VK_NULL_HANDLE;
-	mDepthAttachment.resolveImageLayout			   = ( pResolve != nullptr ) ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+	mDepthAttachment.resolveMode				   = resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
+	mDepthAttachment.resolveImageView			   = resolve ? resolve->getImageViewHandle() : VK_NULL_HANDLE;
+	mDepthAttachment.resolveImageLayout			   = resolve ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
 	mDepthAttachment.loadOp						   = VK_ATTACHMENT_LOAD_OP_LOAD;
 	mDepthAttachment.storeOp					   = VK_ATTACHMENT_STORE_OP_STORE;
 	mDepthAttachment.clearValue.depthStencil.depth = CINDER_DEFAULT_DEPTH;
@@ -118,89 +118,85 @@ CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthAttachment( 
 	return *this;
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthAttachment( const vk::ImageView *pAttachment, float clearValue, const vk::ImageView *pResolve, VkImageLayout imageLayout )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthAttachment( const vk::ImageViewRef &attachment, float clearValue, const vk::ImageViewRef &resolve, VkImageLayout imageLayout )
 {
 	mDepthAttachment.pNext						   = nullptr;
-	mDepthAttachment.imageView					   = pAttachment->getImageViewHandle();
+	mDepthAttachment.imageView					   = attachment->getImageViewHandle();
 	mDepthAttachment.imageLayout				   = imageLayout;
-	mDepthAttachment.resolveMode				   = ( pResolve != nullptr ) ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
-	mDepthAttachment.resolveImageView			   = ( pResolve != nullptr ) ? pResolve->getImageViewHandle() : VK_NULL_HANDLE;
-	mDepthAttachment.resolveImageLayout			   = ( pResolve != nullptr ) ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+	mDepthAttachment.resolveMode				   = resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
+	mDepthAttachment.resolveImageView			   = resolve ? resolve->getImageViewHandle() : VK_NULL_HANDLE;
+	mDepthAttachment.resolveImageLayout			   = resolve ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
 	mDepthAttachment.loadOp						   = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	mDepthAttachment.storeOp					   = VK_ATTACHMENT_STORE_OP_STORE;
-	mDepthAttachment.clearValue.depthStencil.depth = CINDER_DEFAULT_DEPTH;
+	mDepthAttachment.clearValue.depthStencil.depth = clearValue;
 
 	return *this;
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setStencilAttachment( const vk::ImageView *pAttachment, const vk::ImageView *pResolve, VkImageLayout imageLayout )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setStencilAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &resolve, VkImageLayout imageLayout )
 {
-	mDepthAttachment.pNext							 = nullptr;
-	mDepthAttachment.imageView						 = pAttachment->getImageViewHandle();
-	mDepthAttachment.imageLayout					 = imageLayout;
-	mDepthAttachment.resolveMode					 = ( pResolve != nullptr ) ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
-	mDepthAttachment.resolveImageView				 = ( pResolve != nullptr ) ? pResolve->getImageViewHandle() : VK_NULL_HANDLE;
-	mDepthAttachment.resolveImageLayout				 = ( pResolve != nullptr ) ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
-	mDepthAttachment.loadOp							 = VK_ATTACHMENT_LOAD_OP_LOAD;
-	mDepthAttachment.storeOp						 = VK_ATTACHMENT_STORE_OP_STORE;
-	mDepthAttachment.clearValue.depthStencil.stencil = CINDER_DEFAULT_STENCIL;
-
-	mCombinedDepthStencil = false;
+	mStencilAttachment.pNext						   = nullptr;
+	mStencilAttachment.imageView					   = attachment->getImageViewHandle();
+	mStencilAttachment.imageLayout					   = imageLayout;
+	mStencilAttachment.resolveMode					   = resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
+	mStencilAttachment.resolveImageView				   = resolve ? resolve->getImageViewHandle() : VK_NULL_HANDLE;
+	mStencilAttachment.resolveImageLayout			   = resolve ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+	mStencilAttachment.loadOp						   = VK_ATTACHMENT_LOAD_OP_LOAD;
+	mStencilAttachment.storeOp						   = VK_ATTACHMENT_STORE_OP_STORE;
+	mStencilAttachment.clearValue.depthStencil.stencil = CINDER_DEFAULT_STENCIL;
 
 	return *this;
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setStencilAttachment( const vk::ImageView *pAttachment, uint32_t clearValue, const vk::ImageView *pResolve, VkImageLayout imageLayout )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setStencilAttachment( const vk::ImageViewRef &attachment, uint32_t clearValue, const vk::ImageViewRef &resolve, VkImageLayout imageLayout )
 {
-	mDepthAttachment.pNext							 = nullptr;
-	mDepthAttachment.imageView						 = pAttachment->getImageViewHandle();
-	mDepthAttachment.imageLayout					 = imageLayout;
-	mDepthAttachment.resolveMode					 = ( pResolve != nullptr ) ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
-	mDepthAttachment.resolveImageView				 = ( pResolve != nullptr ) ? pResolve->getImageViewHandle() : VK_NULL_HANDLE;
-	mDepthAttachment.resolveImageLayout				 = ( pResolve != nullptr ) ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
-	mDepthAttachment.loadOp							 = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	mDepthAttachment.storeOp						 = VK_ATTACHMENT_STORE_OP_STORE;
-	mDepthAttachment.clearValue.depthStencil.stencil = CINDER_DEFAULT_STENCIL;
-
-	mCombinedDepthStencil = false;
+	mStencilAttachment.pNext						   = nullptr;
+	mStencilAttachment.imageView					   = attachment->getImageViewHandle();
+	mStencilAttachment.imageLayout					   = imageLayout;
+	mStencilAttachment.resolveMode					   = resolve ? VK_RESOLVE_MODE_AVERAGE_BIT : VK_RESOLVE_MODE_NONE;
+	mStencilAttachment.resolveImageView				   = resolve ? resolve->getImageViewHandle() : VK_NULL_HANDLE;
+	mStencilAttachment.resolveImageLayout			   = resolve ? imageLayout : VK_IMAGE_LAYOUT_UNDEFINED;
+	mStencilAttachment.loadOp						   = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	mStencilAttachment.storeOp						   = VK_ATTACHMENT_STORE_OP_STORE;
+	mStencilAttachment.clearValue.depthStencil.stencil = clearValue;
 
 	return *this;
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthStencilAttachment( const vk::ImageView *pAttachment, const vk::ImageView *pResolve )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthStencilAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &resolve )
 {
-	setDepthAttachment( pAttachment, pResolve, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
-	mStencilAttachment	  = {};
-	mCombinedDepthStencil = true;
+	setDepthAttachment( attachment, resolve, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
+	setStencilAttachment( attachment, resolve, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
 	return *this;
 }
 
-CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthStencilAttachment( const vk::ImageView *pAttachment, float depthClearValue, uint32_t stencilClearValue, const vk::ImageView *pResolve )
+CommandBuffer::RenderingInfo &CommandBuffer::RenderingInfo::setDepthStencilAttachment( const vk::ImageViewRef &attachment, float depthClearValue, uint32_t stencilClearValue, const vk::ImageViewRef &resolve )
 {
-	setDepthAttachment( pAttachment, depthClearValue, pResolve, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
-	mStencilAttachment	  = {};
-	mCombinedDepthStencil = true;
+	setDepthAttachment( attachment, depthClearValue, resolve, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
+	setStencilAttachment( attachment, stencilClearValue, resolve, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL );
 	return *this;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CommandBuffer
 
-CommandBufferRef CommandBuffer::create( VkCommandPool poolHandle, VkCommandBufferLevel level, vk::DeviceRef device )
+CommandBufferRef CommandBuffer::create( vk::CommandPoolRef pool, VkCommandBufferLevel level, vk::DeviceRef device )
 {
-	return CommandBufferRef();
+	if ( !device ) {
+		device = app::RendererVk::getCurrentRenderer()->getDevice();
+	}
+
+	return CommandBufferRef( new CommandBuffer( device, pool, level ) );
 }
 
-CommandBuffer::CommandBuffer( vk::DeviceRef device, VkCommandPool poolHandle, VkCommandBufferLevel level, VkCommandBuffer commandBufferHandle, bool disposeCommandBuffer )
+CommandBuffer::CommandBuffer( vk::DeviceRef device, vk::CommandPoolRef pool, VkCommandBufferLevel level )
 	: vk::DeviceChildObject( device ),
-	  mPoolHandle( poolHandle ),
-	  mCommandBufferHandle( commandBufferHandle ),
-	  mDisposeCommandBuffer( disposeCommandBuffer )
+	  mPool( pool )
 {
 	if ( mCommandBufferHandle == VK_NULL_HANDLE ) {
 		VkCommandBufferAllocateInfo vkai = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO };
 		vkai.pNext						 = nullptr;
-		vkai.commandPool				 = mPoolHandle;
+		vkai.commandPool				 = mPool->getCommandPoolHandle();
 		vkai.level						 = level;
 		vkai.commandBufferCount			 = 1;
 
@@ -208,17 +204,20 @@ CommandBuffer::CommandBuffer( vk::DeviceRef device, VkCommandPool poolHandle, Vk
 		if ( vkres != VK_SUCCESS ) {
 			throw VulkanFnFailedExc( "vkAllocateCommandBuffers", vkres );
 		}
-
-		mDisposeCommandBuffer = true;
 	}
+}
+
+CommandBuffer::CommandBuffer( vk::DeviceRef device, VkCommandBuffer commandBufferHandle )
+	: vk::DeviceChildObject( device ),
+	  mCommandBufferHandle( commandBufferHandle )
+{
 }
 
 CommandBuffer::~CommandBuffer()
 {
-	if ( ( mCommandBufferHandle != VK_NULL_HANDLE ) && mDisposeCommandBuffer ) {
-		CI_VK_DEVICE_FN( FreeCommandBuffers( getDeviceHandle(), mPoolHandle, 1, &mCommandBufferHandle ) );
+	if ( ( mCommandBufferHandle != VK_NULL_HANDLE ) && mPool ) {
+		CI_VK_DEVICE_FN( FreeCommandBuffers( getDeviceHandle(), mPool->getCommandPoolHandle(), 1, &mCommandBufferHandle ) );
 		mCommandBufferHandle  = VK_NULL_HANDLE;
-		mDisposeCommandBuffer = false;
 	}
 }
 
@@ -247,32 +246,32 @@ void CommandBuffer::end()
 	mRecording = false;
 }
 
-void CommandBuffer::beginRendering( const RenderingInfo &ri )
+void CommandBuffer::beginRendering( const RenderingInfo &renderingInfo )
 {
-	if ( mRenderingActive ) {
+	if ( mRendering ) {
 		endRendering();
 	}
 
 	VkRenderingInfoKHR vkri	  = { VK_STRUCTURE_TYPE_RENDERING_INFO_KHR };
 	vkri.pNext				  = nullptr;
 	vkri.flags				  = 0;
-	vkri.renderArea			  = ri.mRenderArea;
+	vkri.renderArea			  = renderingInfo.mRenderArea;
 	vkri.layerCount			  = 1;
 	vkri.viewMask			  = 0;
-	vkri.colorAttachmentCount = countU32( ri.mColorAttachments );
-	vkri.pColorAttachments	  = dataPtr( ri.mColorAttachments );
-	vkri.pDepthAttachment	  = ( ri.mDepthAttachment.imageView != VK_NULL_HANDLE ) ? &ri.mDepthAttachment : nullptr;
-	vkri.pStencilAttachment	  = ( ri.mStencilAttachment.imageView != VK_NULL_HANDLE ) ? &ri.mStencilAttachment : nullptr;
+	vkri.colorAttachmentCount = countU32( renderingInfo.mColorAttachments );
+	vkri.pColorAttachments	  = dataPtr( renderingInfo.mColorAttachments );
+	vkri.pDepthAttachment	  = ( renderingInfo.mDepthAttachment.imageView != VK_NULL_HANDLE ) ? &renderingInfo.mDepthAttachment : nullptr;
+	vkri.pStencilAttachment	  = ( renderingInfo.mStencilAttachment.imageView != VK_NULL_HANDLE ) ? &renderingInfo.mStencilAttachment : nullptr;
 
 	CI_VK_DEVICE_FN( CmdBeginRenderingKHR( getCommandBufferHandle(), &vkri ) );
 
-	mRenderingActive = true;
+	mRendering = true;
 }
 
 void CommandBuffer::endRendering()
 {
 	CI_VK_DEVICE_FN( CmdEndRenderingKHR( getCommandBufferHandle() ) );
-	mRenderingActive = false;
+	mRendering = false;
 }
 
 void CommandBuffer::clearColorAttachment( uint32_t index, const VkClearColorValue &clearValue, const VkRect2D &rect )
@@ -391,7 +390,7 @@ std::vector<vk::CommandBufferRef> CommandPool::allocateCommandBuffers( uint32_t 
 		}
 
 		for ( uint32_t i = 0; i < count; ++i ) {
-			commandBuffers.push_back( vk::CommandBufferRef( new vk::CommandBuffer( getDevice(), mCommandPoolHandle, level, commandBufferHandles[i], true ) ) );
+			commandBuffers.push_back( vk::CommandBufferRef( new vk::CommandBuffer( getDevice(), commandBufferHandles[i] ) ) );
 		}
 	}
 

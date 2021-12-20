@@ -201,7 +201,7 @@ void Swapchain::init( const VkExtent2D &extent, const Options &options )
 
 			// Create sync objects
 			Sync sync				 = {};
-			sync.imageReadySemaphore = Semaphore::create( VK_SEMAPHORE_TYPE_BINARY, getDevice() );
+			sync.imageReadySemaphore = Semaphore::create( getDevice() );
 			sync.imageReadyFence	 = Fence::create( false, getDevice() );
 			mSyncs.push_back( sync );
 		}

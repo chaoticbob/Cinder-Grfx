@@ -1,6 +1,7 @@
 #include "cinder/vk/wrapper.h"
 #include "cinder/vk/Command.h"
 #include "cinder/vk/Context.h"
+#include "cinder/vk/Image.h"
 
 namespace cinder::vk {
 
@@ -12,21 +13,21 @@ Context *context()
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Command buffer functions
 
-void setRenderPass( const std::vector<const vk::ImageView *> &colorAttachments, const vk::ImageView *pDepthStencilAttachment )
-{
-	vk::CommandBuffer::RenderingInfo ri = {};
-
-	for ( const auto &elem : colorAttachments ) {
-		ri.addColorAttachment( elem );
-	}
-
-	if ( pDepthStencilAttachment != nullptr ) {
-		ri.setDepthStencilAttachment( pDepthStencilAttachment );
-	}
-
-	auto ctx = vk::context();
-	ctx->getCommandBuffer()->beginRendering( ri );
-}
+//void setRenderPass( const std::vector<const vk::ImageView *> &colorAttachments, const vk::ImageView *pDepthStencilAttachment )
+//{
+//	vk::CommandBuffer::RenderingInfo ri = {};
+//
+//	for ( const auto &elem : colorAttachments ) {
+//		ri.addColorAttachment( elem );
+//	}
+//
+//	if ( pDepthStencilAttachment != nullptr ) {
+//		ri.setDepthStencilAttachment( pDepthStencilAttachment );
+//	}
+//
+//	auto ctx = vk::context();
+//	ctx->getCommandBuffer()->beginRendering( ri );
+//}
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // OpenGL style functions
@@ -47,6 +48,7 @@ void clear( VkImageAspectFlags mask )
 	auto ctx = vk::context();
 
 	if ( mask & VK_IMAGE_ASPECT_COLOR_BIT ) {
+		ctx->clearColorAttachment( 0 );
 	}
 
 	if ( ( mask & VK_IMAGE_ASPECT_DEPTH_BIT ) || ( mask & VK_IMAGE_ASPECT_STENCIL_BIT ) ) {

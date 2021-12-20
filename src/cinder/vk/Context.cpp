@@ -8,7 +8,23 @@
 
 namespace cinder::vk {
 
-Context *sCurrentContext = nullptr;
+static Context *sCurrentContext = nullptr;
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// Context::Options
+Context::Options::Options( VkFormat renderTargetFormat, VkFormat depthStencilFormat, uint32_t samples )
+	: mRenderTargetFormat( renderTargetFormat ), mDepthFormat( depthStencilFormat ), mSampleCount( toVkSampleCount( samples ) )
+{
+}
+
+Context::Options &Context::Options::sampleCount( uint32_t value )
+{
+	mSampleCount = toVkSampleCount( value );
+	return *this;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// Context
 
 ContextRef Context::create( const Options &options, vk::DeviceRef device )
 {
@@ -78,7 +94,7 @@ void Context::initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame 
 	for ( uint32_t i = 0; i < numRenderTargets; ++i ) {
 		vk::Image::Usage   usage   = vk::Image::Usage().renderTarget().sampledImage();
 		vk::Image::Options options = vk::Image::Options().samples( mSampleCount );
-		frame.renderTargets[i]	   = vk::Image::create( mWidth, mHeight, mDepthFormat, usage, vk::MemoryUsage::GPU_ONLY, options, getDevice() );
+		frame.renderTargets[i]	   = vk::Image::create( mWidth, mHeight, mRenderTargetFormats[i], usage, vk::MemoryUsage::GPU_ONLY, options, getDevice() );
 
 		frame.rtvs[i] = vk::ImageView::create( frame.renderTargets[i], getDevice() );
 	}
@@ -111,9 +127,34 @@ void Context::initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame 
 	}
 }
 
-void Context::makeCurrent()
+void Context::makeCurrent( const std::vector<SemaphoreInfo> &externalWaits )
 {
 	sCurrentContext = this;
+
+	// Wait for any external semaphores
+	if ( !externalWaits.empty() ) {
+		std::vector<VkSemaphore> semaphores;
+		std::vector<uint64_t>	 values;
+		for ( const auto &wait : externalWaits ) {
+			if ( !wait.semaphore->isTimeline() ) {
+				throw VulkanExc( "all external waits must be timeline semaphores" );
+			}
+			semaphores.push_back( wait.semaphore->getSemaphoreHandle() );
+			values.push_back( wait.value );
+		}
+
+		VkSemaphoreWaitInfo vkswi = { VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO };
+		vkswi.pNext				  = nullptr;
+		vkswi.flags				  = 0;
+		vkswi.semaphoreCount	  = countU32( semaphores );
+		vkswi.pSemaphores		  = dataPtr( semaphores );
+		vkswi.pValues			  = dataPtr( values );
+
+		VkResult vkres = CI_VK_DEVICE_FN( WaitSemaphores( getDeviceHandle(), &vkswi, UINT64_MAX ) );
+		if ( vkres != VK_SUCCESS ) {
+			throw VulkanFnFailedExc( "vkWaitSemaphores", vkres );
+		}
+	}
 
 	// Wait for any pending work to complete
 	waitForCompletion();
@@ -124,6 +165,11 @@ void Context::makeCurrent()
 	// Start command buffer recording if it's not already started
 	if ( !frame.commandBuffer->isRecording() ) {
 		frame.commandBuffer->begin();
+	}
+	// Start rendering if it's not already started
+	if ( !frame.commandBuffer->isRendering() ) {
+		vk::CommandBuffer::RenderingInfo ri = vk::CommandBuffer::RenderingInfo( frame.rtvs, frame.dtv );
+		frame.commandBuffer->beginRendering( ri );
 	}
 }
 
@@ -142,9 +188,14 @@ const Context::Frame &Context::getCurrentFrame() const
 	return mFrames[mFrameIndex];
 }
 
-void Context::submit( const SemaphoreList &waits, const SemaphoreList &signals )
+void Context::submit( const std::vector<SemaphoreInfo> &waits, const std::vector<SemaphoreInfo> &signals )
 {
 	Frame &frame = getCurrentFrame();
+
+	// End rendeirng
+	if ( frame.commandBuffer->isRendering() ) {
+		frame.commandBuffer->endRendering();
+	}
 
 	// End command buffer recording
 	if ( frame.commandBuffer->isRecording() ) {
@@ -153,59 +204,53 @@ void Context::submit( const SemaphoreList &waits, const SemaphoreList &signals )
 
 	frame.frameSignaledValue = mFrameSyncSemaphore->incrementCounter();
 
-	VkCommandBuffer commandBuffer = frame.commandBuffer->getCommandBufferHandle();
-
-	std::vector<VkSemaphore>		  waitSemaphores;
-	std::vector<uint64_t>			  waitValues;
-	std::vector<VkPipelineStageFlags> waitDstStageMasks;
-	for ( const auto &elem : waits.mSemaphores ) {
-		waitSemaphores.push_back( elem.semaphore->getSemaphoreHandle() );
-		waitValues.push_back( elem.value );
-		waitDstStageMasks.push_back( VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT );
+	vk::SubmitInfo submitInfo = vk::SubmitInfo()
+									.addCommandBuffer( frame.commandBuffer )
+									.addSignal( mFrameSyncSemaphore, frame.frameSignaledValue );
+	// Waits
+	for ( const auto &wait : waits ) {
+		submitInfo.addWait( wait.semaphore, wait.value );
+	}
+	// Signals
+	for ( const auto &signal : signals ) {
+		submitInfo.addSignal( signal.semaphore, signal.value );
 	}
 
-	std::vector<VkSemaphore> signalSemaphores;
-	std::vector<uint64_t>	 signalValues;
-	signalSemaphores.push_back( mFrameSyncSemaphore->getSemaphoreHandle() );
-	signalValues.push_back( frame.frameSignaledValue );
-	for ( const auto &elem : signals.mSemaphores ) {
-		signalSemaphores.push_back( elem.semaphore->getSemaphoreHandle() );
-		signalValues.push_back( elem.value );
-	}
-
-	VkTimelineSemaphoreSubmitInfo tsSubmitInfo = { VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO };
-	tsSubmitInfo.pNext						   = nullptr;
-	tsSubmitInfo.waitSemaphoreValueCount	   = countU32( waitValues );
-	tsSubmitInfo.pWaitSemaphoreValues		   = dataPtr( waitValues );
-	tsSubmitInfo.signalSemaphoreValueCount	   = countU32( signalValues );
-	tsSubmitInfo.pSignalSemaphoreValues		   = dataPtr( signalValues );
-
-	VkSubmitInfo submitInfo			= { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-	submitInfo.pNext				= &tsSubmitInfo;
-	submitInfo.waitSemaphoreCount	= countU32( waitSemaphores );
-	submitInfo.pWaitSemaphores		= dataPtr( waitSemaphores );
-	submitInfo.pWaitDstStageMask	= dataPtr( waitDstStageMasks );
-	submitInfo.commandBufferCount	= 1;
-	submitInfo.pCommandBuffers		= &commandBuffer;
-	submitInfo.signalSemaphoreCount = countU32( signalSemaphores );
-	submitInfo.pSignalSemaphores	= dataPtr( signalSemaphores );
-
-	VkResult vkres = getDevice()->submitGraphics( &submitInfo );
+	VkResult vkres = getDevice()->submitGraphics( submitInfo );
 	if ( vkres != VK_SUCCESS ) {
-		throw VulkanFnFailedExc( "vkQueueSumbit", vkres );
+		throw vk::VulkanFnFailedExc( "vkQueueSumbit", vkres );
 	}
 
 	// Increment frame count
 	++mFrameCount;
 	// Update frame index
-	mFrameIndex = static_cast<uint32_t>( mFrameCount % mNumFramesInFlight );
+	mPreviousFrameIndex = mFrameIndex;
+	mFrameIndex			= static_cast<uint32_t>( mFrameCount % mNumFramesInFlight );
 }
 
 void Context::waitForCompletion()
 {
 	Frame &frame = getCurrentFrame();
 
-	mFrameSyncSemaphore->wait( frame.frameSignaledValue );
+	// Avoid unncessary waits
+	const uint64_t counterValue = mFrameSyncSemaphore->getCounterValue();
+	if ( counterValue < frame.frameSignaledValue ) {
+		mFrameSyncSemaphore->wait( frame.frameSignaledValue );
+	}
+}
+
+void Context::clearColorAttachment( uint32_t index )
+{
+	VkRect2D rect = getCurrentFrame().renderTargets[index]->getArea();
+
+	const ColorA &	  value		 = mClearState.get().color;
+	VkClearColorValue clearValue = { value.r, value.g, value.b, value.a };
+
+	getCommandBuffer()->clearColorAttachment( index, clearValue, rect );
+}
+
+void Context::clearDepthStencilAttachment( VkImageAspectFlags aspectMask )
+{
 }
 
 } // namespace cinder::vk

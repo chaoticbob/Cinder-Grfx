@@ -1,8 +1,10 @@
 #include "cinder/vk/Device.h"
 #include "cinder/vk/Buffer.h"
+#include "cinder/vk/Command.h"
 #include "cinder/vk/Environment.h"
 #include "cinder/vk/Image.h"
 #include "cinder/vk/Sampler.h"
+#include "cinder/vk/Sync.h"
 #include "cinder/vk/Util.h"
 #include "cinder/app/AppBase.h"
 
@@ -18,7 +20,31 @@
 namespace cinder::vk {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// SamplerCache
+// SubmitInfo
+
+SubmitInfo &SubmitInfo::addCommandBuffer( const vk::CommandBufferRef &commandBuffer )
+{
+	mCommandBuffers.push_back( commandBuffer->getCommandBufferHandle() );
+	return *this;
+}
+
+SubmitInfo &SubmitInfo::addWait( const vk::Semaphore *semaphore, uint64_t value )
+{
+	mWaitSemaphores.push_back( semaphore->getSemaphoreHandle() );
+	mWaitValues.push_back( value );
+	mWaitDstStageMasks.push_back( VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT );
+	return *this;
+}
+
+SubmitInfo &SubmitInfo::addSignal( const vk::Semaphore *semaphore, uint64_t value )
+{
+	mSignalSemaphores.push_back( semaphore->getSemaphoreHandle() );
+	mSignalValues.push_back( value );
+	return *this;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Device::SamplerCache
 
 Device::SamplerCache::SamplerCache( vk::Device *pDevice )
 	: mDevice( pDevice )
@@ -135,6 +161,7 @@ static void configureExtensions(
 		extensions.push_back( VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME );
 		extensions.push_back( VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME );
+		extensions.push_back( VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME );
 	}
 
 	// Enumerate extensions
@@ -578,6 +605,29 @@ VkResult Device::submitGraphics( const VkSubmitInfo *pSubmitInfo, VkFence fence,
 	}
 
 	return VK_SUCCESS;
+}
+
+VkResult Device::submitGraphics( const vk::SubmitInfo &submitInfo, VkFence fence, bool waitForIdle )
+{
+	VkTimelineSemaphoreSubmitInfo vktssi = { VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO };
+	vktssi.pNext						 = nullptr;
+	vktssi.waitSemaphoreValueCount		 = countU32( submitInfo.mWaitValues );
+	vktssi.pWaitSemaphoreValues			 = dataPtr( submitInfo.mWaitValues );
+	vktssi.signalSemaphoreValueCount	 = countU32( submitInfo.mSignalValues );
+	vktssi.pSignalSemaphoreValues		 = dataPtr( submitInfo.mSignalValues );
+
+	VkSubmitInfo vksi		  = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+	vksi.pNext				  = &vktssi;
+	vksi.waitSemaphoreCount	  = countU32( submitInfo.mWaitSemaphores );
+	vksi.pWaitSemaphores	  = dataPtr( submitInfo.mWaitSemaphores );
+	vksi.pWaitDstStageMask	  = dataPtr( submitInfo.mWaitDstStageMasks );
+	vksi.commandBufferCount	  = countU32( submitInfo.mCommandBuffers );
+	vksi.pCommandBuffers	  = dataPtr( submitInfo.mCommandBuffers );
+	vksi.signalSemaphoreCount = countU32( submitInfo.mSignalSemaphores );
+	vksi.pSignalSemaphores	  = dataPtr( submitInfo.mSignalSemaphores );
+
+	VkResult vkres = this->submitGraphics( &vksi, fence, waitForIdle );
+	return vkres;
 }
 
 VkResult Device::submitCompute( const VkSubmitInfo *pSubmitInfo, VkFence fence, bool waitForIdle )

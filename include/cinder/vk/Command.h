@@ -12,10 +12,7 @@ class CommandBuffer
 {
 public:
 	//
-	// Usage:
-	//   - Combined depth/stencil uses depth resources and null out stencil resources.
-	//   - Setting combined depth/stencil will invalidate stencil member variables.
-	//   - Setting stencil after setting combined depth/stencil disables combine depth/stencil.
+	// NOTE: Seperated depth/stencil is coming just not here yet.
 	//
 	struct RenderingInfo
 	{
@@ -24,42 +21,48 @@ public:
 		RenderingInfo( const VkRect2D &area )
 			: mRenderArea( area ) {}
 
-		RenderingInfo( const vk::ImageView *pColorAttachment, const vk::ImageView *pDepthStencilAttachment );
+		RenderingInfo( const vk::ImageViewRef &colorAttachment, const vk::ImageViewRef &depthStenciAttachment = nullptr );
 
-		RenderingInfo( const std::vector<const vk::ImageView *> colorAttachments, const vk::ImageView *pDepthStencilAttachment );
-
-		RenderingInfo( const std::vector<const vk::ImageView *> colorAttachments, const vk::ImageView *pDepthAttachment, const vk::ImageView *pStencilAttachment );
+		RenderingInfo( const std::vector<vk::ImageViewRef> &colorAttachments, const vk::ImageViewRef &depthStenciAttachment = nullptr );
 
 		// clang-format off
-		RenderingInfo& renderArea(const VkRect2D& rect) { mRenderArea = rect; return *this; }
-		RenderingInfo& addColorAttachment( const vk::ImageView* pAttachment, const vk::ImageView* pResolve = nullptr );
-		RenderingInfo& addColorAttachment( const vk::ImageView* pAttachment, const ColorA& clearValue, const vk::ImageView* pResolve = nullptr);
-		RenderingInfo& setDepthAttachment( const vk::ImageView* pAttachment, const vk::ImageView* pResolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL );
-		RenderingInfo& setDepthAttachment( const vk::ImageView* pAttachment, float clearValue, const vk::ImageView* pResolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL );
-		RenderingInfo& setStencilAttachment( const vk::ImageView* pAttachment, const vk::ImageView* pResolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL );
-		RenderingInfo& setStencilAttachment( const vk::ImageView* pAttachment, uint32_t clearValue, const vk::ImageView* pResolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL );
-		RenderingInfo& setDepthStencilAttachment( const vk::ImageView* pAttachment, const vk::ImageView* pResolve = nullptr );
-		RenderingInfo& setDepthStencilAttachment( const vk::ImageView* pAttachment, float depthClearValue, uint32_t stencilClearValue, const vk::ImageView* pResolve = nullptr );
+		RenderingInfo &renderArea(const VkRect2D &rect) { mRenderArea = rect; return *this; }
+		RenderingInfo &addColorAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &resolve = nullptr );
+		RenderingInfo &addColorAttachment( const vk::ImageViewRef &attachment, const ColorA &clearValue, const vk::ImageViewRef &resolve = nullptr);
+		RenderingInfo &setDepthStencilAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &resolve = nullptr );
+		RenderingInfo &setDepthStencilAttachment( const vk::ImageViewRef &attachment, float depthClearValue, uint32_t stencilClearValue, const vk::ImageViewRef &resolve = nullptr );
 		// clang-format on
 
 	private:
-		VkRect2D								  mRenderArea			= {};
-		std::vector<VkRenderingAttachmentInfoKHR> mColorAttachments		= {};
-		VkRenderingAttachmentInfoKHR			  mDepthAttachment		= { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR };
-		VkRenderingAttachmentInfoKHR			  mStencilAttachment	= { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR };
-		bool									  mCombinedDepthStencil = false;
+		RenderingInfo( const std::vector<vk::ImageViewRef> &colorAttachments, const vk::ImageViewRef &dDepthAttachment, const vk::ImageViewRef &stencilAttachment );
+
+		// clang-format off
+		// Make these public when seperated depth/stencil has landed.
+		RenderingInfo &setDepthAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &resolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL );
+		RenderingInfo &setDepthAttachment( const vk::ImageViewRef &attachment, float clearValue, const vk::ImageViewRef &resolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL );
+		RenderingInfo &setStencilAttachment( const vk::ImageViewRef &attachment, const vk::ImageViewRef &pResolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL );
+		RenderingInfo &setStencilAttachment( const vk::ImageViewRef &attachment, uint32_t clearValue, const vk::ImageViewRef &resolve = nullptr, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL );
+		// clang-format on
+
+	private:
+		VkRect2D								  mRenderArea		 = {};
+		std::vector<VkRenderingAttachmentInfoKHR> mColorAttachments	 = {};
+		VkRenderingAttachmentInfoKHR			  mDepthAttachment	 = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR };
+		VkRenderingAttachmentInfoKHR			  mStencilAttachment = { VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR };
 
 		friend CommandBuffer;
 	};
 
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 	virtual ~CommandBuffer();
 
-	static CommandBufferRef create( VkCommandPool poolHandle, VkCommandBufferLevel level, vk::DeviceRef device = vk::DeviceRef() );
+	static CommandBufferRef create( vk::CommandPoolRef pool, VkCommandBufferLevel level, vk::DeviceRef device = vk::DeviceRef() );
 
 	VkCommandBuffer getCommandBufferHandle() const { return mCommandBufferHandle; }
 
 	bool isRecording() const { return mRecording; }
-	bool isRenderingActive() const { return mRenderingActive; }
+	bool isRendering() const { return mRendering; }
 
 	void begin( VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT );
 	void end();
@@ -90,15 +93,15 @@ public:
 		VkPipelineStageFlags newPipelineStageFlags );
 
 private:
-	CommandBuffer( vk::DeviceRef device, VkCommandPool poolHandle, VkCommandBufferLevel level, VkCommandBuffer commandBufferHandle, bool disposeCommandBuffer );
+	CommandBuffer( vk::DeviceRef device, vk::CommandPoolRef pool, VkCommandBufferLevel level );
+	CommandBuffer( vk::DeviceRef device, VkCommandBuffer commandBufferHandle );
 	friend class CommandPool;
 
 private:
-	VkCommandPool	mPoolHandle			  = VK_NULL_HANDLE;
-	VkCommandBuffer mCommandBufferHandle  = VK_NULL_HANDLE;
-	bool			mDisposeCommandBuffer = false;
-	bool			mRecording			  = false;
-	bool			mRenderingActive	  = false;
+	vk::CommandPoolRef mPool;
+	VkCommandBuffer	   mCommandBufferHandle = VK_NULL_HANDLE;
+	bool			   mRecording			= false;
+	bool			   mRendering			= false;
 };
 
 //! @class CommandPool
@@ -113,7 +116,7 @@ public:
 		Options() {}
 
 		// clang-format off
-		Options& flags(VkCommandPoolCreateFlags value) { mFlags = value; return *this; }
+		Options& flags( VkCommandPoolCreateFlags value ) { mFlags = value; return *this; }
 		// clang-format on
 
 	private:

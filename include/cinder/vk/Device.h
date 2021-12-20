@@ -14,6 +14,28 @@
 
 namespace cinder::vk {
 
+class SubmitInfo
+{
+public:
+	SubmitInfo() {}
+
+	SubmitInfo &addCommandBuffer( const vk::CommandBufferRef &commandBuffer );
+	SubmitInfo &addWait( const vk::Semaphore *semaphore, uint64_t value = 0 );
+	SubmitInfo &addWait( const vk::SemaphoreRef &semaphore, uint64_t value = 0 ) { return addWait( semaphore.get(), value ); }
+	SubmitInfo &addSignal( const vk::Semaphore *semaphore, uint64_t value = 0 );
+	SubmitInfo &addSignal( const vk::SemaphoreRef &semaphore, uint64_t value = 0 ) { return addSignal( semaphore.get(), value ); }
+
+private:
+	std::vector<VkCommandBuffer>	  mCommandBuffers;
+	std::vector<VkSemaphore>		  mWaitSemaphores;
+	std::vector<uint64_t>			  mWaitValues;
+	std::vector<VkPipelineStageFlags> mWaitDstStageMasks;
+	std::vector<VkSemaphore>		  mSignalSemaphores;
+	std::vector<uint64_t>			  mSignalValues;
+
+	friend class Device;
+};
+
 class Device
 	: public std::enable_shared_from_this<Device>
 {
@@ -86,6 +108,7 @@ public:
 
 	//! Submit work to graphics queue
 	VkResult submitGraphics( const VkSubmitInfo *pSubmitInfo, VkFence fence = VK_NULL_HANDLE, bool waitForIdle = false );
+	VkResult submitGraphics( const vk::SubmitInfo &submitInfo, VkFence fence = VK_NULL_HANDLE, bool waitForIdle = false );
 	//! Submit work to compute queue
 	VkResult submitCompute( const VkSubmitInfo *pSubmitInfo, VkFence fence = VK_NULL_HANDLE, bool waitForIdle = false );
 	//! Submit work to transfer queue
