@@ -1,7 +1,10 @@
 #include "cinder/vk/Texture.h"
+#include "cinder/vk//Context.h"
 #include "cinder/vk/Device.h"
 #include "cinder/vk/Image.h"
+#include "cinder/vk/wrapper.h"
 #include "cinder/app/RendererVk.h"
+#include "cinder/ip/Resize.h"
 
 namespace cinder::vk {
 
@@ -102,15 +105,76 @@ TextureBase::~TextureBase()
 {
 }
 
+static uint32_t countMips( uint32_t width )
+{
+	uint32_t mipLevels = 1;
+	while ( width > 1 ) {
+		if ( width > 1 ) {
+			width >>= 1;
+		}
+		++mipLevels;
+	}
+	return mipLevels;
+}
+
+static uint32_t countMips( uint32_t width, uint32_t height )
+{
+	uint32_t mipLevels = 1;
+	while ( ( width > 1 ) || ( height > 1 ) ) {
+		if ( width > 1 ) {
+			width >>= 1;
+		}
+		if ( height > 1 ) {
+			height >>= 1;
+		}
+		++mipLevels;
+	}
+	return mipLevels;
+}
+
+static uint32_t countMips( uint32_t width, uint32_t height, uint32_t depth )
+{
+	uint32_t mipLevels = 1;
+	while ( ( width > 1 ) || ( height > 1 ) || ( depth > 1 ) ) {
+		if ( width > 1 ) {
+			width >>= 1;
+		}
+		if ( height > 1 ) {
+			height >>= 1;
+		}
+		if ( depth > 1 ) {
+			depth >>= 1;
+		}
+		++mipLevels;
+	}
+	return mipLevels;
+}
+
 void TextureBase::initImage( VkFormat imageFormat, const Format &format )
 {
 	mImageFormat = imageFormat;
 
-	Image::Usage imageUsage = Image::Usage().sampledImage();
+	Image::Usage imageUsage = Image::Usage().transferSrc().transferDst().sampledImage();
+
+	uint32_t mipLevels = format.getMipLevels();
+	if ( mipLevels > 1 ) {
+		uint32_t mipLevelCount = 0;
+		switch ( mImageType ) {
+			default: break;
+			case VK_IMAGE_TYPE_1D: mipLevelCount = countMips( mExtent.width ); break;
+			case VK_IMAGE_TYPE_2D: mipLevelCount = countMips( mExtent.width, mExtent.height ); break;
+			case VK_IMAGE_TYPE_3D: mipLevelCount = countMips( mExtent.width, mExtent.height, mExtent.depth ); break;
+		}
+		mipLevels = std::min<uint32_t>( mipLevels, mipLevelCount );
+	}
+
+	if ( mipLevels == 0 ) {
+		throw VulkanExc( "invalid mip levle count" );
+	}
 
 	Image::Options imageOptions = Image::Options();
 	imageOptions.samples( format.getSamples() );
-	imageOptions.mipLevels( format.getMipLevels() );
+	imageOptions.mipLevels( mipLevels );
 	imageOptions.arrayLayers( format.getArrayLayers() );
 	imageOptions.tiling( format.getTiling() );
 
@@ -144,8 +208,10 @@ void TextureBase::initSampler( const Format &format )
 	}
 }
 
-void TextureBase::bind( uint32_t binding, uint32_t set )
+void TextureBase::unbind( uint32_t binding )
 {
+	auto ctx = Context::getCurrentContext();
+	ctx->unbindTexture( binding );
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -291,6 +357,7 @@ Texture2d::Texture2d( vk::DeviceRef device, const void *data, VkFormat dataForma
 {
 	initImage( dataFormat, format );
 	initSampler( format );
+	initViews();
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const Surface8u &surface, Format format )
@@ -327,6 +394,7 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface8u &surface, Format for
 
 	initImage( imageFormat, format );
 	initSampler( format );
+	initViews();
 
 	const Surface8u *pSrcSurface = &surface;
 	Surface8u		 surfaceRgba;
@@ -337,12 +405,12 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface8u &surface, Format for
 		pSrcSurface = &surface;
 	}
 
-	getDevice()->copyToImage(
-		static_cast<uint32_t>( pSrcSurface->getWidth() ),
-		static_cast<uint32_t>( pSrcSurface->getHeight() ),
-		static_cast<uint32_t>( pSrcSurface->getRowBytes() ),
-		pSrcSurface->getData(),
-		mImage.get() );
+	//getDevice()->copyToImage(
+	//	static_cast<uint32_t>( pSrcSurface->getWidth() ),
+	//	static_cast<uint32_t>( pSrcSurface->getHeight() ),
+	//	static_cast<uint32_t>( pSrcSurface->getRowBytes() ),
+	//	pSrcSurface->getData(),
+	//	mImage.get() );
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const Surface16u &surface, Format format )
@@ -379,6 +447,7 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface16u &surface, Format fo
 
 	initImage( imageFormat, format );
 	initSampler( format );
+	initViews();
 
 	const Surface16u *pSrcSurface = &surface;
 	Surface16u		  surfaceRgba;
@@ -389,12 +458,12 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface16u &surface, Format fo
 		pSrcSurface = &surface;
 	}
 
-	getDevice()->copyToImage(
-		static_cast<uint32_t>( pSrcSurface->getWidth() ),
-		static_cast<uint32_t>( pSrcSurface->getHeight() ),
-		static_cast<uint32_t>( pSrcSurface->getRowBytes() ),
-		pSrcSurface->getData(),
-		mImage.get() );
+	//getDevice()->copyToImage(
+	//	static_cast<uint32_t>( pSrcSurface->getWidth() ),
+	//	static_cast<uint32_t>( pSrcSurface->getHeight() ),
+	//	static_cast<uint32_t>( pSrcSurface->getRowBytes() ),
+	//	pSrcSurface->getData(),
+	//	mImage.get() );
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const Surface32f &surface, Format format )
@@ -431,6 +500,7 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface32f &surface, Format fo
 
 	initImage( imageFormat, format );
 	initSampler( format );
+	initViews();
 
 	const Surface32f *pSrcSurface = &surface;
 	Surface32f		  surfaceRgba;
@@ -441,12 +511,12 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface32f &surface, Format fo
 		pSrcSurface = &surface;
 	}
 
-	getDevice()->copyToImage(
-		static_cast<uint32_t>( pSrcSurface->getWidth() ),
-		static_cast<uint32_t>( pSrcSurface->getHeight() ),
-		static_cast<uint32_t>( pSrcSurface->getRowBytes() ),
-		pSrcSurface->getData(),
-		mImage.get() );
+	//getDevice()->copyToImage(
+	//	static_cast<uint32_t>( pSrcSurface->getWidth() ),
+	//	static_cast<uint32_t>( pSrcSurface->getHeight() ),
+	//	static_cast<uint32_t>( pSrcSurface->getRowBytes() ),
+	//	pSrcSurface->getData(),
+	//	mImage.get() );
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const Channel8u &channel, Format format )
@@ -456,13 +526,14 @@ Texture2d::Texture2d( vk::DeviceRef device, const Channel8u &channel, Format for
 {
 	initImage( VK_FORMAT_R8_UNORM, format );
 	initSampler( format );
+	initViews();
 
-	getDevice()->copyToImage(
-		static_cast<uint32_t>( channel.getWidth() ),
-		static_cast<uint32_t>( channel.getHeight() ),
-		static_cast<uint32_t>( channel.getRowBytes() ),
-		channel.getData(),
-		mImage.get() );
+	//getDevice()->copyToImage(
+	//	static_cast<uint32_t>( channel.getWidth() ),
+	//	static_cast<uint32_t>( channel.getHeight() ),
+	//	static_cast<uint32_t>( channel.getRowBytes() ),
+	//	channel.getData(),
+	//	mImage.get() );
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const Channel16u &channel, Format format )
@@ -472,13 +543,14 @@ Texture2d::Texture2d( vk::DeviceRef device, const Channel16u &channel, Format fo
 {
 	initImage( VK_FORMAT_R16_UNORM, format );
 	initSampler( format );
+	initViews();
 
-	getDevice()->copyToImage(
-		static_cast<uint32_t>( channel.getWidth() ),
-		static_cast<uint32_t>( channel.getHeight() ),
-		static_cast<uint32_t>( channel.getRowBytes() ),
-		channel.getData(),
-		mImage.get() );
+	//getDevice()->copyToImage(
+	//	static_cast<uint32_t>( channel.getWidth() ),
+	//	static_cast<uint32_t>( channel.getHeight() ),
+	//	static_cast<uint32_t>( channel.getRowBytes() ),
+	//	channel.getData(),
+	//	mImage.get() );
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const Channel32f &channel, Format format )
@@ -488,13 +560,14 @@ Texture2d::Texture2d( vk::DeviceRef device, const Channel32f &channel, Format fo
 {
 	initImage( VK_FORMAT_R32_SFLOAT, format );
 	initSampler( format );
+	initViews();
 
-	getDevice()->copyToImage(
-		static_cast<uint32_t>( channel.getWidth() ),
-		static_cast<uint32_t>( channel.getHeight() ),
-		static_cast<uint32_t>( channel.getRowBytes() ),
-		channel.getData(),
-		mImage.get() );
+	//getDevice()->copyToImage(
+	//	static_cast<uint32_t>( channel.getWidth() ),
+	//	static_cast<uint32_t>( channel.getHeight() ),
+	//	static_cast<uint32_t>( channel.getRowBytes() ),
+	//	channel.getData(),
+	//	mImage.get() );
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, Format format )
@@ -596,6 +669,7 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 
 	initImage( imageFormat, format );
 	initSampler( format );
+	initViews();
 
 	uint32_t srcWidth	 = static_cast<uint32_t>( imageSource->getWidth() );
 	uint32_t srcHeight	 = static_cast<uint32_t>( imageSource->getHeight() );
@@ -609,12 +683,39 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 				} break;
 
 				case ImageIo::DataType::UINT8: {
+					if ( isGray ) {
+						auto	 mip0	  = Channel8u( imageSource );
+						uint32_t width	  = static_cast<uint32_t>( mip0.getWidth() );
+						uint32_t height	  = static_cast<uint32_t>( mip0.getHeight() );
+						uint32_t rowBytes = static_cast<uint32_t>( mip0.getRowBytes() );
+						getDevice()->copyToImage( width, height, rowBytes, mip0.getData(), 0, 0, mImage.get() );
+
+						const uint32_t numMipLevels = mImage->getMipLevels();
+						for ( uint32_t mipLevel = 1; mipLevel < numMipLevels; ++mipLevel ) {
+							width >>= 1;
+							height >>= 1;
+							rowBytes >>= 1;
+
+							void *pStorage = getDevice()->beginCopyToImage( width, height, rowBytes, mipLevel, 0, mImage.get() );
+
+							Channel8u mipN = Channel8u( width, height, rowBytes, 1, reinterpret_cast<uint8_t *>( pStorage ) );
+
+							ip::resize( mip0, &mipN, ci::FilterCatmullRom() );
+
+							getDevice()->endCopyToImage( width, height, rowBytes, mipLevel, 0, mImage.get() );
+						}
+					}
+					else {
+					}
+
+					/*
 					void *pStorage = getDevice()->beginCopyToImage( srcWidth, srcHeight, srcRowBytes, mImage.get() );
 
 					auto imageTarget = ImageTargetTexture<uint8_t>::create( this, ImageIo::ChannelOrder::Y, isGray, false, pStorage );
 					imageSource->load( imageTarget );
 
 					getDevice()->endCopyToImage( srcWidth, srcHeight, srcRowBytes, mImage.get() );
+					*/
 				} break;
 			}
 		} break;
@@ -638,6 +739,19 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 
 Texture2d::~Texture2d()
 {
+}
+
+void Texture2d::initViews()
+{
+	vk::ImageView::Options options = vk::ImageView::Options( mImage.get() ).components( mComponentMapping );
+
+	mSampledImage = vk::ImageView::create( mImage, options, getDevice() );
+}
+
+void Texture2d::bind( uint32_t binding )
+{
+	auto ctx = vk::context();
+	ctx->bindTexture( binding, mSampledImage.get(), mSampler.get() );
 }
 
 } // namespace cinder::vk

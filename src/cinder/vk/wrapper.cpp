@@ -52,6 +52,7 @@ void clear( VkImageAspectFlags mask )
 	}
 
 	if ( ( mask & VK_IMAGE_ASPECT_DEPTH_BIT ) || ( mask & VK_IMAGE_ASPECT_STENCIL_BIT ) ) {
+		ctx->clearDepthStencilAttachment( mask );
 	}
 }
 
@@ -77,6 +78,13 @@ void clearStencil( const int stencil )
 {
 	auto ctx = vk::context();
 	ctx->clearStencil( stencil );
+}
+
+std::pair<ivec2, ivec2> getViewport()
+{
+	auto ctx = vk::context();
+	auto view = ctx->getViewport();
+	return view;
 }
 
 void disableDepthRead()
@@ -229,6 +237,72 @@ void multProjectionMatrix( const ci::mat4 &mtx )
 {
 	auto ctx = vk::context();
 	ctx->getProjectionMatrixStack().back() *= mtx;
+}
+
+mat4 getModelMatrix()
+{
+	auto ctx = vk::context();
+	return ctx->getModelMatrixStack().back();
+}
+
+mat4 getViewMatrix()
+{
+	auto ctx = vk::context();
+	return ctx->getViewMatrixStack().back();
+}
+
+mat4 getProjectionMatrix()
+{
+	auto ctx = vk::context();
+	return ctx->getProjectionMatrixStack().back();
+}
+
+mat4 getModelView()
+{
+	auto ctx = context();
+	return ctx->getViewMatrixStack().back() * ctx->getModelMatrixStack().back();
+}
+
+mat4 getModelViewProjection()
+{
+	auto ctx = context();
+	return ctx->getProjectionMatrixStack().back() * ctx->getViewMatrixStack().back() * ctx->getModelMatrixStack().back();
+}
+
+mat4 calcViewMatrixInverse()
+{
+	return glm::inverse( getViewMatrix() );
+}
+
+mat3 calcNormalMatrix()
+{
+	return glm::inverseTranspose( glm::mat3( getModelView() ) );
+}
+	
+mat3 calcModelMatrixInverseTranspose()
+{
+	auto m = glm::inverseTranspose( getModelMatrix() );
+	return mat3( m );
+}
+	
+mat4 calcViewportMatrix()
+{
+	auto curViewport = vk::getViewport();
+	
+	const float a = ( curViewport.second.x - curViewport.first.x ) / 2.0f;
+	const float b = ( curViewport.second.y - curViewport.first.y ) / 2.0f;
+	const float c = 1.0f / 2.0f;
+	
+	const float tx = ( curViewport.second.x + curViewport.first.x ) / 2.0f;
+	const float ty = ( curViewport.second.y + curViewport.second.y ) / 2.0f;
+	const float tz = 1.0f / 2.0f;
+	
+	return mat4(
+		a, 0, 0, 0,
+		0, b, 0, 0,
+		0, 0, c, 0,
+		tx, ty, tz, 1
+	);
 }
 
 } // namespace cinder::vk

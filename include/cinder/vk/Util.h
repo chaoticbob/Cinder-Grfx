@@ -1,15 +1,60 @@
 #pragma once
 
 #include "cinder/vk/vk_config.h"
+#include "cinder/GeomIo.h"
 
 namespace cinder::vk {
 
 class Device;
 
-VmaMemoryUsage toVmaMemoryUsage( MemoryUsage value );
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Objects
+
+struct CI_API VertexAttribute
+{
+	VertexAttribute() {}
+
+	VertexAttribute(const std::string& name, uint32_t location, VkFormat format, geom::Attrib semantic)
+		: mName(name), mLocation(location), mFormat(format), mSemantic(semantic) {}
+
+	//! Returns a const reference of the name as defined in the Vertex Shader.
+	const std::string &getName() const { return mName; }
+	//! Returns the Vertex Shader generated or user defined location of this attribute.
+	uint32_t getLocation() const { return mLocation; }
+	//! Returns the GLenum representation of the type of this attribute (for example, \c GL_FLOAT_VEC3)
+	VkFormat getFormat() const { return mFormat; }
+	//! Returns the defined geom::Attrib semantic.
+	geom::Attrib getSemantic() const { return mSemantic; }
+	//! Used to derive the expected layout for cpu types within glsl.
+
+private:
+	std::string	 mName;
+	uint32_t	 mLocation = UINT32_MAX;
+	VkFormat	 mFormat   = VK_FORMAT_UNDEFINED;
+	geom::Attrib mSemantic = geom::Attrib::USER_DEFINED;
+};
+
+struct DescriptorBinding
+{
+	VkDescriptorType type;
+	uint32_t		 binding;
+	uint32_t		 set;
+	std::string		 name;
+};
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Functions
+
+VmaMemoryUsage toVmaMemoryUsage( vk::MemoryUsage value );
 
 //! Returns a VkSampleCountFlagBits value based on samples
 VkSampleCountFlagBits toVkSampleCount( uint32_t samples );
+
+//! Returns VkPrimitiveTopology for geom::Primitive
+VkPrimitiveTopology toVkPrimitive( geom::Primitive value );
+
+//! Returns VkFormat for attribInfo
+VkFormat toVkFormat( const geom::AttribInfo &attribInfo );
 
 //! Returns size of format
 uint32_t formatSize( VkFormat format );

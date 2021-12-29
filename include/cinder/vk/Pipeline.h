@@ -155,10 +155,10 @@ public:
 	struct ColorBlendAttachment
 	{
 		VkBool32			  blendEnable		  = VK_FALSE;
-		VkBlendFactor		  srcColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+		VkBlendFactor		  srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
 		VkBlendFactor		  dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
 		VkBlendOp			  colorBlendOp		  = VK_BLEND_OP_ADD;
-		VkBlendFactor		  srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+		VkBlendFactor		  srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
 		VkBlendFactor		  dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
 		VkBlendOp			  alphaBlendOp		  = VK_BLEND_OP_ADD;
 		VkColorComponentFlags colorWriteMask	  = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
@@ -222,6 +222,9 @@ public:
 
 	struct Options
 	{
+		Options() {}
+		Options( const GraphicsPipelineState &gs );
+
 		// clang-format off
 		/*
 		Options& attributeFormat(uint32_t index, VkFormat format);
@@ -243,6 +246,8 @@ public:
 	virtual ~Pipeline();
 
 	static PipelineRef create( ShaderProgRef shaderProg, PipelineLayoutRef pipelineLayout, Options &options = Options(), DeviceRef device = DeviceRef() );
+
+	VkPipeline getPipelineHandle() const { return mPipelineHandle; }
 
 private:
 	Pipeline( DeviceRef device, ShaderProgRef shaderProg, PipelineLayoutRef pipelineLayout, Options &options );

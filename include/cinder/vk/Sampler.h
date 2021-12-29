@@ -67,6 +67,8 @@ public:
 
 	static vk::SamplerRef create( const Options &options = Options(), vk::DeviceRef device = vk::DeviceRef() );
 
+	VkSampler getSamplerHandle() const { return mSamplerHandle; }
+
 private:
 	Sampler( vk::DeviceRef device, const Options &options );
 

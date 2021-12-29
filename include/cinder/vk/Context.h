@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/Pipeline.h"
 #include "cinder/Camera.h"
 #include "cinder/CinderGlm.h"
 
@@ -18,6 +19,10 @@ private:
 	//
 	struct Frame
 	{
+		vk::DescriptorPoolRef descriptorPool;
+		vk::DescriptorSetRef  descriptorSet;
+		vk::BufferRef		  defaultUniformBuffer;
+
 		std::vector<vk::ImageRef>	  renderTargets;
 		vk::ImageRef				  depthTarget;
 		vk::ImageRef				  stencilTarget;
@@ -61,68 +66,6 @@ public:
 		friend class Context;
 	};
 
-	/*
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	struct SemaphoreInfo
-	{
-		const vk::Semaphore *semaphore;
-		uint64_t			 value;
-	};
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	struct SemaphoreList
-	{
-		SemaphoreList() {}
-		SemaphoreList( const Semaphore *semaphore ) { addSemaphore( semaphore ); }
-		SemaphoreList( const Semaphore *semaphore, uint64_t value ) { addSemaphore( semaphore, value ); }
-
-		// clang-format off
-		//! Adds a binary semaphore 
-		SemaphoreList &addSemaphore( const Semaphore *semaphore ) { mSemaphores.push_back( { semaphore, 0 } ); return *this; }
-		//! Adds a timeline semaphore 
-		SemaphoreList &addSemaphore( const Semaphore *semaphore, uint64_t value ) { mSemaphores.push_back( { semaphore, value } ); return *this; }
-		// clang-format on
-
-	private:
-		std::vector<SemaphoreInfo> mSemaphores;
-
-		friend class Context;
-	};
-*/
-
-	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-	//struct SyncInfo
-	//{
-	//	struct SemaphoreInfo
-	//	{
-	//		vk::SemaphoreRef semaphore;
-	//		uint64_t		 value;
-	//	};
-	//
-	//	SyncInfo() {}
-	//
-	//	SyncInfo &addWait( vk::SemaphoreRef semaphore, uint64_t value )
-	//	{
-	//		mWaits.push_back( SemaphoreInfo{ semaphore, value } );
-	//		return *this;
-	//	}
-	//
-	//	SyncInfo &addSignal( vk::SemaphoreRef semaphore, uint64_t value )
-	//	{
-	//		mSignals.push_back( SemaphoreInfo{ semaphore, value } );
-	//		return *this;
-	//	}
-	//
-	//private:
-	//	std::vector<SemaphoreInfo> mWaits;
-	//	std::vector<SemaphoreInfo> mSignals;
-	//
-	//	friend class Context;
-	//};
-
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	struct SemaphoreInfo
@@ -145,18 +88,33 @@ public:
 
 	bool isRenderable() const { return ( mWidth > 0 ) && ( mHeight > 0 ); }
 
-	// Sets the clear value
-	void clearColor( const ColorA &color ) { mClearState.get().color = color; }
-	void clearDepth( const float depth ) { mClearState.get().depth = depth; }
-	void clearStencil( const int stencil ) { mClearState.get().stencil = static_cast<uint8_t>( stencil ); }
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void enableDepthWrite( bool enable ) { mDepthState.get().depthWrite = enable; }
-	void enableDepthTest( bool enable ) { mDepthState.get().depthTest = enable; }
-	void enableStencilTest( bool enable ) { mStencilState.get().stencilTest = enable; }
+	// Sets the clear value
+	void clearColor( const ColorA &color ) { mClearValues.color = color; }
+	void clearDepth( const float depth ) { mClearValues.depth = depth; }
+	void clearStencil( const int stencil ) { mClearValues.stencil = static_cast<uint8_t>( stencil ); }
+
+	// clang-format off
+	void enableDepthWrite( bool enable ) { mGraphicsState.ds.depthWriteEnable = enable; }
+	void enableDepthTest( bool enable ) { mGraphicsState.ds.depthTestEnable = enable; }
+	void enableStencilTest( bool enable ) { mGraphicsState.ds.stencilTestEnable = enable; }
+	// clang-format on
 
 	std::vector<ci::mat4> &getModelMatrixStack() { return mModelMatrixStack; }
 	std::vector<ci::mat4> &getViewMatrixStack() { return mViewMatrixStack; }
 	std::vector<ci::mat4> &getProjectionMatrixStack() { return mProjectionMatrixStack; }
+
+	std::pair<ivec2, ivec2> getViewport();
+
+	void bindShaderProg( vk::ShaderProgRef prog );
+
+	void bindTexture( uint32_t binding, vk::ImageView *imageView, vk::Sampler *sampler );
+	void unbindTexture( uint32_t binding );
+
+	void setDefaultShaderVars();
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	vk::CommandBuffer *getCommandBuffer() const { return getCurrentFrame().commandBuffer.get(); }
 
@@ -170,77 +128,90 @@ public:
 	void clearColorAttachment( uint32_t index );
 	void clearDepthStencilAttachment( VkImageAspectFlags aspectMask );
 
+	void bindDefaultDescriptorSet();
+	void bindIndexBuffers( const vk::BufferedMeshRef &mesh );
+	void bindVertexBuffers( const vk::BufferedMeshRef &mesh );
+	void bindGraphicsPipeline();
+	void draw( int32_t firstVertex, int32_t vertexCount );
+	void drawIndexed( int32_t firstIndex, int32_t indexCount );
+
 private:
 	Context( vk::DeviceRef device, uint32_t width, uint32_t height, const Options &options );
 
+	void		 initializeDescriptorSetLayouts();
+	void		 initializePipelineLayout();
 	void		 initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame );
 	Frame &		 getCurrentFrame();
 	const Frame &getCurrentFrame() const;
 
+	void assignVertexAttributeLocations();
+
 private:
-	struct ClearState
+	struct ClearValues
 	{
 		ColorA	color	= ColorA( 0, 0, 0, 0 );
-		float	depth	= 0.0f;
-		uint8_t stencil = 0xFF;
+		float	depth	= CINDER_DEFAULT_DEPTH;
+		uint8_t stencil = CINDER_DEFAULT_STENCIL;
 	};
 
-	struct DepthState
+	/*
+	struct GraphicsState
 	{
-		bool depthWrite = false;
-		bool depthTest	= false;
+		std::vector<vk::Pipeline::Attribute> vertexAttributes;
+		std::vector<vk::BufferRef>			 vertexBuffers;
+		VkCullModeFlags						 cullMode	 = VK_CULL_MODE_NONE;
+		VkFrontFace							 frontFace	 = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		bool								 depthWrite	 = false;
+		bool								 depthTest	 = false;
+		bool								 stencilTest = false;
+		vk::ShaderProgRef					 program;
 	};
+*/
 
-	struct StencilState
-	{
-		bool stencilTest = false;
-	};
-
-	template <typename StateT>
-	class StateStack
+	class DescriptorState
 	{
 	public:
-		StateStack( uint32_t initialSize = 1 )
-			: mStack( 1 ), mIndex( 0 ) {}
+		DescriptorState();
+		~DescriptorState() {}
 
-		~StateStack() {}
-
-		void set( const StateT &state )
-		{
-			mStatck[mIndex] = state;
-		}
-
-		StateT &get()
-		{
-			return mStack[mIndex];
-		}
-
-		const StateT &get() const
-		{
-			return mStack[mIndex];
-		}
-
-		void push()
-		{
-			uint32_t newIndex = mIndex + 1;
-			if ( newIndex >= mStack.size() ) {
-				StateT current = get();
-				mStack.emplace_back( current );
-			}
-			mIndex = newIndex;
-		}
-
-		void pop()
-		{
-			if ( mIndex == 0 ) {
-				return;
-			}
-			--mIndex;
-		}
+		void bindUniformBuffer( uint32_t bindingNumber, vk::Buffer *buffer );
+		void bindCombinedImageSampler( uint32_t bindingNumber, vk::ImageView *imageView, vk::Sampler *sampler );
 
 	private:
-		std::vector<StateT> mStack;
-		uint32_t			mIndex;
+		struct BufferInfo
+		{
+			vk::Buffer *buffer;
+		};
+
+		struct ImageInfo
+		{
+			vk::ImageView *imageView;
+			vk::Sampler *  sampler;
+		};
+
+		struct Descriptor
+		{
+			VkDescriptorType type		   = static_cast<VkDescriptorType>( ~0 );
+			uint32_t		 bindingNumber = UINT32_MAX;
+
+			union
+			{
+				BufferInfo bufferInfo = {};
+				ImageInfo  imageInfo;
+			};
+
+			Descriptor() {}
+
+			Descriptor( uint32_t aBindingNumber, vk::Buffer *aBuffer )
+				: type( VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ), bindingNumber( aBindingNumber ), bufferInfo( { aBuffer } ) {}
+
+			Descriptor( uint32_t aBindingNumber, vk::ImageView *aImageView, vk::Sampler *aSampler )
+				: type( VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ), bindingNumber( aBindingNumber ), imageInfo( { aImageView, aSampler } ) {}
+		};
+
+		std::map<uint32_t, Descriptor> mDescriptors;
+
+		friend class Context;
 	};
 
 	uint32_t			  mNumFramesInFlight	= 0;
@@ -259,12 +230,21 @@ private:
 	uint32_t				 mPreviousFrameIndex = 0;
 	vk::CountingSemaphoreRef mFrameSyncSemaphore;
 
-	StateStack<ClearState>	 mClearState;
-	StateStack<DepthState>	 mDepthState;
-	StateStack<StencilState> mStencilState;
-	std::vector<ci::mat4>	 mModelMatrixStack		= std::vector<ci::mat4>( 1 );
-	std::vector<ci::mat4>	 mViewMatrixStack		= std::vector<ci::mat4>( 1 );
-	std::vector<ci::mat4>	 mProjectionMatrixStack = std::vector<ci::mat4>( 1 );
+	ClearValues							 mClearValues = {};
+	std::vector<std::pair<ivec2, ivec2>> mViewportStack;
+	std::vector<std::pair<ivec2, ivec2>> mScissorStack;
+	std::vector<ci::mat4>				 mModelMatrixStack;
+	std::vector<ci::mat4>				 mViewMatrixStack;
+	std::vector<ci::mat4>				 mProjectionMatrixStack;
+
+	std::vector<std::pair<geom::BufferLayout, vk::BufferRef>> mVertexBuffers;
+	vk::ShaderProgRef										  mShaderProgram;
+	vk::Pipeline::GraphicsPipelineState						  mGraphicsState = {};
+
+	vk::DescriptorSetLayoutRef mDefaultSetLayout;
+	vk::PipelineLayoutRef	   mDefaultPipelineLayout;
+	DescriptorState			   mDescriptorState;
+	vk::PipelineRef			   mGraphicsPipeline;
 };
 
 } // namespace cinder::vk

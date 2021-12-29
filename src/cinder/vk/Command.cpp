@@ -1,6 +1,9 @@
 #include "cinder/vk/Command.h"
+#include "cinder/vk/Buffer.h"
+#include "cinder/vk/Descriptor.h"
 #include "cinder/vk/Device.h"
 #include "cinder/vk/Image.h"
+#include "cinder/vk/Pipeline.h"
 #include "cinder/app/RendererVk.h"
 
 namespace cinder::vk {
@@ -217,7 +220,7 @@ CommandBuffer::~CommandBuffer()
 {
 	if ( ( mCommandBufferHandle != VK_NULL_HANDLE ) && mPool ) {
 		CI_VK_DEVICE_FN( FreeCommandBuffers( getDeviceHandle(), mPool->getCommandPoolHandle(), 1, &mCommandBufferHandle ) );
-		mCommandBufferHandle  = VK_NULL_HANDLE;
+		mCommandBufferHandle = VK_NULL_HANDLE;
 	}
 }
 
@@ -244,6 +247,40 @@ void CommandBuffer::end()
 	}
 
 	mRecording = false;
+}
+
+void CommandBuffer::bindDescriptorSets(
+	VkPipelineBindPoint						 pipelineBindPoint,
+	const vk::PipelineLayoutRef &			 pipelineLayout,
+	uint32_t								 firstSet,
+	const std::vector<vk::DescriptorSetRef> &sets,
+	uint32_t								 dynamicOffsetCount,
+	const uint32_t *						 pDynamicOffsets )
+{
+	std::vector<VkDescriptorSet> handles;
+	for ( auto &set : sets ) {
+		handles.push_back( set->getDescriptorSetHandle() );
+	}
+
+	CI_VK_DEVICE_FN( CmdBindDescriptorSets(
+		getCommandBufferHandle(),
+		pipelineBindPoint,
+		pipelineLayout->getPipelineLayoutHandle(),
+		firstSet,
+		countU32( handles ),
+		dataPtr( handles ),
+		0,
+		nullptr ) );
+}
+
+void CommandBuffer::bindPipeline(
+	VkPipelineBindPoint	   pipelineBindPoint,
+	const vk::PipelineRef &pipeline )
+{
+	CI_VK_DEVICE_FN( CmdBindPipeline(
+		getCommandBufferHandle(),
+		pipelineBindPoint,
+		pipeline->getPipelineHandle() ) );
 }
 
 void CommandBuffer::beginRendering( const RenderingInfo &renderingInfo )
@@ -274,6 +311,33 @@ void CommandBuffer::endRendering()
 	mRendering = false;
 }
 
+void CommandBuffer::setScissor( int32_t x, int32_t y, uint32_t width, uint32_t height )
+{
+	VkRect2D rect = { { x, y }, { width, height } };
+	CI_VK_DEVICE_FN( CmdSetScissor( getCommandBufferHandle(), 0, 1, &rect ) );
+}
+
+void CommandBuffer::setViewport( float x, float y, float width, float height, float minDepth, float maxDepth )
+{
+	VkViewport viewport = {};
+//*
+	viewport.x			= x;
+	viewport.y			= height;
+	viewport.width		= width;
+	viewport.height		= -height;
+	viewport.minDepth	= minDepth;
+	viewport.maxDepth	= maxDepth;
+/*/
+	viewport.x			= x;
+	viewport.y			= y;
+	viewport.width		= width;
+	viewport.height		= height;
+	viewport.minDepth	= minDepth;
+	viewport.maxDepth	= maxDepth;
+//*/
+	CI_VK_DEVICE_FN( CmdSetViewport( getCommandBufferHandle(), 0, 1, &viewport ) );
+}
+
 void CommandBuffer::clearColorAttachment( uint32_t index, const VkClearColorValue &clearValue, const VkRect2D &rect )
 {
 	VkClearAttachment attachment = {};
@@ -291,6 +355,8 @@ void CommandBuffer::clearColorAttachment( uint32_t index, const VkClearColorValu
 
 void CommandBuffer::clearDepthStencilAttachment( float depthClearValue, uint32_t stencilClearValue, const VkRect2D &rect, VkImageAspectFlags aspectMask )
 {
+	aspectMask = ( aspectMask & ( VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT ) );
+
 	VkClearAttachment attachment			   = {};
 	attachment.aspectMask					   = aspectMask;
 	attachment.colorAttachment				   = {};
@@ -313,6 +379,45 @@ void CommandBuffer::clearDepthAttachment( float clearValue, const VkRect2D &rect
 void CommandBuffer::clearStencilAttachment( uint32_t clearValue, const VkRect2D &rect )
 {
 	clearDepthStencilAttachment( CINDER_DEFAULT_STENCIL, clearValue, rect, VK_IMAGE_ASPECT_STENCIL_BIT );
+}
+
+void CommandBuffer::bindIndexBuffer( vk::BufferRef &buffer, uint32_t offset, VkIndexType indexType )
+{
+	CI_VK_DEVICE_FN( CmdBindIndexBuffer(
+		getCommandBufferHandle(),
+		buffer->getBufferHandle(),
+		offset,
+		indexType ) );
+}
+
+void CommandBuffer::bindVertexBuffers( uint32_t firstBinding, const std::vector<vk::BufferRef> &buffers, std::vector<uint64_t> offsets )
+{
+	bool insertOffsets = offsets.empty() ? true : false;
+
+	std::vector<VkBuffer> handles;
+	for ( auto &buffer : buffers ) {
+		handles.push_back( buffer->getBufferHandle() );
+		if ( insertOffsets ) {
+			offsets.push_back( 0 );
+		}
+	}
+
+	CI_VK_DEVICE_FN( CmdBindVertexBuffers(
+		getCommandBufferHandle(),
+		firstBinding,
+		countU32( handles ),
+		dataPtr( handles ),
+		dataPtr( offsets ) ) );
+}
+
+void CommandBuffer::draw( uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance )
+{
+	CI_VK_DEVICE_FN( CmdDraw( getCommandBufferHandle(), vertexCount, instanceCount, firstVertex, firstInstance ) );
+}
+
+void CommandBuffer::drawIndexed( uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance )
+{
+	CI_VK_DEVICE_FN( CmdDrawIndexed( getCommandBufferHandle(), indexCount, instanceCount, firstIndex, vertexOffset, firstInstance ) );
 }
 
 void CommandBuffer::transitionImageLayout(

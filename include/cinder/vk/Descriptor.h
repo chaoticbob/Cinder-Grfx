@@ -28,13 +28,13 @@ public:
 		Options& pushDescriptor(bool value  = true ) { vk::changeFlagBit(mFlags, VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR, value); return *this; }
 		Options& updateAfterBind(bool value = true ) { vk::changeFlagBit(mFlags, VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT, value); return *this; }
 		Options& addSampler( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
-		Options& addCombinedImageSampler( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
-		Options& addSampledImage( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
-		Options& addStorageImage( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
-		Options& addUniformBuffer( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
-		Options& addStorageBuffer( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
-		Options& addUniformBufferDynamic( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
-		Options& addStorageBufferDynamic( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLER, count, stageFlags } ); return *this; }
+		Options& addCombinedImageSampler( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, count, stageFlags } ); return *this; }
+		Options& addSampledImage( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, count, stageFlags } ); return *this; }
+		Options& addStorageImage( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, count, stageFlags } ); return *this; }
+		Options& addUniformBuffer( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, count, stageFlags } ); return *this; }
+		Options& addStorageBuffer( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, count, stageFlags } ); return *this; }
+		Options& addUniformBufferDynamic( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, count, stageFlags } ); return *this; }
+		Options& addStorageBufferDynamic( uint32_t binding, uint32_t count = 1, VkShaderStageFlags stageFlags = DEFAULT_STAGE_FLAGS ) { mBindings.push_back( { binding, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, count, stageFlags } ); return *this; }
 		// clang-format on
 
 	private:
@@ -67,14 +67,17 @@ class DescriptorSet
 public:
 	virtual ~DescriptorSet();
 
+	static vk::DescriptorSetRef create( vk::DescriptorPoolRef pool, const vk::DescriptorSetLayoutRef& layout );
+
 	VkDescriptorSet getDescriptorSetHandle() const { return mDescriptorSetHandle; }
 
 private:
-	DescriptorSet( vk::DeviceRef device, VkDescriptorSet handle );
+	DescriptorSet( vk::DescriptorPoolRef pool, const vk::DescriptorSetLayoutRef& layout );
 	friend class DescriptorPool;
 
 private:
-	VkDescriptorSet mDescriptorSetHandle = VK_NULL_HANDLE;
+	vk::DescriptorPoolRef mPool;
+	VkDescriptorSet		  mDescriptorSetHandle = VK_NULL_HANDLE;
 };
 
 //! @class DescriptorPool
@@ -93,13 +96,13 @@ public:
 		Options& updateAfterBind(bool value = true) { vk::changeFlagBit(mFlags, VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT, value); return *this; } 
 		Options& maxSets( uint32_t value ) { mMaxSets = value; return *this; }
 		Options& addSampler( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
-		Options& addCombinedImageSampler( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
-		Options& addSampledImage( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
-		Options& addStorageImage( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
-		Options& addUniformBuffer( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
-		Options& addStorageBuffer( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
-		Options& addUniformBufferDynamic( uint32_t descriptorCount ) { mPoolSizes.push_back( {  VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
-		Options& addStorageBufferDynamic( uint32_t descriptorCount ) { mPoolSizes.push_back( {  VK_DESCRIPTOR_TYPE_SAMPLER, descriptorCount } ); return *this; }
+		Options& addCombinedImageSampler( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, descriptorCount } ); return *this; }
+		Options& addSampledImage( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, descriptorCount } ); return *this; }
+		Options& addStorageImage( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, descriptorCount } ); return *this; }
+		Options& addUniformBuffer( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorCount } ); return *this; }
+		Options& addStorageBuffer( uint32_t descriptorCount ) { mPoolSizes.push_back( { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorCount } ); return *this; }
+		Options& addUniformBufferDynamic( uint32_t descriptorCount ) { mPoolSizes.push_back( {  VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, descriptorCount } ); return *this; }
+		Options& addStorageBufferDynamic( uint32_t descriptorCount ) { mPoolSizes.push_back( {  VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, descriptorCount } ); return *this; }
 		// clang-format on
 
 	private:

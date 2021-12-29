@@ -4,6 +4,9 @@
 #include "cinder/ImageIo.h"
 #include "cinder/Log.h"
 
+#include "cinder/vk/Device.h"
+#include "cinder/vk/Mesh.h"
+
 using namespace ci;
 using namespace ci::app;
 namespace gl = ci::vk;
@@ -54,6 +57,23 @@ void RotatingCubeApp::setup()
 		CI_LOG_E( "Shader Error: " << e.what() );
 	}
 
+/*
+	auto		  indexBuffer = mBatch->getMesh()->getIndices();
+	vk::BufferRef tempBuffer  = vk::Buffer::create( 1024, vk::Buffer::Usage().transferDst(), vk::MemoryUsage::CPU_ONLY, vk::context()->getDevice() );
+
+	vk::context()->getDevice()->copyBufferToBuffer(
+		72,
+		indexBuffer.get(),
+		0,
+		tempBuffer.get(),
+		0 );
+
+	void *pMappedData = nullptr;
+	tempBuffer->map( &pMappedData );
+
+	int stopMe = 1;
+*/
+
 	gl::enableDepthWrite();
 	gl::enableDepthRead();
 }
@@ -74,7 +94,7 @@ void RotatingCubeApp::update()
 
 void RotatingCubeApp::draw()
 {
-	gl::clear( ColorA( 1, 0, 0, 1 ) );
+	gl::clear();
 
 	gl::setMatrices( mCam );
 

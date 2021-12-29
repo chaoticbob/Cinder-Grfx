@@ -10,6 +10,28 @@
 
 namespace cinder::vk {
 
+static const std::string CI_VK_DEFAULT_UNIFORM_BLOCK_NAME = "gl_DefaultUniformBlock";
+
+static std::map<std::string, UniformSemantic> sDefaultUniformNameToSemanticMap = {
+	{ "ciModelMatrix", UNIFORM_MODEL_MATRIX },
+	{ "ciModelMatrixInverse", UNIFORM_MODEL_MATRIX_INVERSE },
+	{ "ciModelMatrixInverseTranspose", UNIFORM_MODEL_MATRIX_INVERSE_TRANSPOSE },
+	{ "ciViewMatrix", UNIFORM_VIEW_MATRIX },
+	{ "ciViewMatrixInverse", UNIFORM_VIEW_MATRIX_INVERSE },
+	{ "ciModelView", UNIFORM_MODEL_VIEW },
+	{ "ciModelViewInverse", UNIFORM_MODEL_VIEW_INVERSE },
+	{ "ciModelViewInverseTranspose", UNIFORM_MODEL_VIEW_INVERSE_TRANSPOSE },
+	{ "ciModelViewProjection", UNIFORM_MODEL_VIEW_PROJECTION },
+	{ "ciModelViewProjectionInverse", UNIFORM_MODEL_VIEW_PROJECTION_INVERSE },
+	{ "ciProjectionMatrix", UNIFORM_PROJECTION_MATRIX },
+	{ "ciProjectionMatrixInverse", UNIFORM_PROJECTION_MATRIX_INVERSE },
+	{ "ciViewProjection", UNIFORM_VIEW_PROJECTION },
+	{ "ciNormalMatrix", UNIFORM_NORMAL_MATRIX },
+	{ "ciViewportMatrix", UNIFORM_VIEWPORT_MATRIX },
+	{ "ciWindowSize", UNIFORM_WINDOW_SIZE },
+	{ "ciElapsedSeconds", UNIFORM_ELAPSED_SECONDS },
+};
+
 static std::map<std::string, geom::Attrib> sDefaultAttribNameToSemanticMap = {
 	{ "ciPosition", geom::Attrib::POSITION },
 	{ "ciNormal", geom::Attrib::NORMAL },
@@ -92,6 +114,9 @@ ShaderModule::ShaderModule( vk::DeviceRef device, size_t spirvSize, const char *
 		case SPV_REFLECT_SHADER_STAGE_CALLABLE_BIT_KHR            :	mShaderStage = VK_SHADER_STAGE_CALLABLE_BIT_KHR           ; break;
 		}
 		// clang-format on
+
+		parseDescriptorBindings();
+		parseUniformBlocks();
 	}
 
 	// Creat shader module
@@ -122,14 +147,168 @@ ShaderModule::~ShaderModule()
 	}
 }
 
+void ShaderModule::parseDescriptorBindings()
+{
+	uint32_t		 count	= 0;
+	SpvReflectResult spvres = mReflection.EnumerateDescriptorBindings( &count, nullptr );
+	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding count failed" );
+	}
+
+	mSpirvBindings.resize( count );
+	spvres = mReflection.EnumerateDescriptorBindings( &count, dataPtr( mSpirvBindings ) );
+	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding failed" );
+	}
+}
+
+static vk::DataType dtermineDataType( const SpvReflectTypeDescription *pDesc )
+{
+	uint32_t sign  = 0;
+	uint32_t width = 32;
+	uint32_t rows  = 1;
+	uint32_t cols  = 1;
+
+	vk::CompositeType composite = vk::CompositeType::SCALAR;
+	if ( pDesc->op == SpvOpTypeVector ) {
+		composite = vk::CompositeType::VECTOR;
+		rows	  = pDesc->traits.numeric.vector.component_count;
+	}
+	else if ( pDesc->op == SpvOpTypeMatrix ) {
+		composite = vk::CompositeType::MATRIX;
+		rows	  = pDesc->traits.numeric.matrix.row_count;
+		cols	  = pDesc->traits.numeric.matrix.column_count;
+	}
+
+	vk::ScalarType scalar = vk::ScalarType::UNKNOWN;
+	if ( pDesc->type_flags & SPV_REFLECT_TYPE_FLAG_BOOL ) {
+		scalar = vk::ScalarType::BOOL;
+	}
+	else if ( pDesc->type_flags & SPV_REFLECT_TYPE_FLAG_INT ) {
+		scalar = vk::ScalarType::INT;
+	}
+	else if ( pDesc->type_flags & SPV_REFLECT_TYPE_FLAG_FLOAT ) {
+		sign   = 1;
+		scalar = vk::ScalarType::FLOAT;
+	}
+
+	uint32_t typeValue = CINDER_VK_MAKE_DATA_TYPE( sign, composite, rows, cols, scalar, width );
+
+	vk::DataType dataType = static_cast<vk::DataType>( typeValue );
+	// Validate just in case macro generated unknown type
+	switch ( dataType ) {
+		default:
+			dataType = vk::DataType::UNKNOWN;
+			break;
+		case vk::DataType::BOOL1:
+		case vk::DataType::BOOL2:
+		case vk::DataType::BOOL3:
+		case vk::DataType::BOOL4:
+		case vk::DataType::INT1:
+		case vk::DataType::INT2:
+		case vk::DataType::INT3:
+		case vk::DataType::INT4:
+		case vk::DataType::UINT1:
+		case vk::DataType::UINT2:
+		case vk::DataType::UINT3:
+		case vk::DataType::UINT4:
+		case vk::DataType::FLOAT1:
+		case vk::DataType::FLOAT2:
+		case vk::DataType::FLOAT3:
+		case vk::DataType::FLOAT4:
+		case vk::DataType::FLOAT2x2:
+		case vk::DataType::FLOAT2x3:
+		case vk::DataType::FLOAT2x4:
+		case vk::DataType::FLOAT3x2:
+		case vk::DataType::FLOAT3x3:
+		case vk::DataType::FLOAT3x4:
+		case vk::DataType::FLOAT4x2:
+		case vk::DataType::FLOAT4x3:
+		case vk::DataType::FLOAT4x4:
+			break;
+	}
+
+	return dataType;
+}
+
+static void parseSpirvUniformBlock( std::string prefix, const SpvReflectBlockVariable &spirvBlock, std::vector<Uniform> &uniforms )
+{
+	for ( uint32_t i = 0; i < spirvBlock.member_count; ++i ) {
+		const SpvReflectBlockVariable &member = spirvBlock.members[i];
+
+		if ( member.type_description->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) {
+		}
+		else {
+			std::stringstream name;
+			if ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+				name << prefix << ".";
+			}
+			name << member.name;
+
+			vk::DataType dataType = dtermineDataType( member.type_description );
+			if ( dataType == vk::DataType::UNKNOWN ) {
+				throw VulkanExc( "failed to determine data type for uniform variable" );
+			}
+
+			vk::UniformSemantic uniformSemantic = vk::UniformSemantic::UNIFORM_USER_DEFINED;
+			auto				it				= sDefaultUniformNameToSemanticMap.find( name.str() );
+			if ( it != sDefaultUniformNameToSemanticMap.end() ) {
+				uniformSemantic = it->second;
+			}
+
+			uint32_t offset = member.absolute_offset;
+
+			uint32_t arraySize	 = 1;
+			uint32_t arrayStride = 0;
+			if ( member.type_description->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+				for ( uint32_t j = 0; j < member.array.dims_count; ++j ) {
+					uint32_t dim = member.array.dims[j];
+					arraySize *= dim;
+				}
+
+				arrayStride = member.array.stride;
+			}
+
+			uniforms.emplace_back( name.str(), dataType, uniformSemantic, offset, arraySize );
+		}
+	}
+}
+
+void ShaderModule::parseUniformBlocks()
+{
+	for ( size_t i = 0; i < mSpirvBindings.size(); ++i ) {
+		const SpvReflectDescriptorBinding *pSpvBinding = mSpirvBindings[i];
+		if ( pSpvBinding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER ) {
+			continue;
+		}
+
+		std::string name	 = pSpvBinding->block.name;
+		std::string typeName = spvReflectBlockVariableTypeName( &pSpvBinding->block );
+		if ( name.empty() && ( typeName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) ) {
+			name = typeName;
+		}
+
+		std::vector<Uniform> uniforms;
+		parseSpirvUniformBlock( name, pSpvBinding->block, uniforms );
+
+		auto uniformBlock = std::make_unique<UniformBlock>( name, pSpvBinding->block.size, pSpvBinding->binding, pSpvBinding->set, uniforms );
+
+		if ( ( mReflection.GetShaderModule().source_language == SpvSourceLanguageGLSL ) && ( name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) ) {
+			mDefaultUniformBlock = uniformBlock.get();
+		}
+
+		mUniformBlocks.push_back( std::move( uniformBlock ) );
+	}
+}
+
 const char *ShaderModule::getEntryPoint() const
 {
 	return mReflection.GetEntryPointName();
 }
 
-std::vector<VertexAttribute> ShaderModule::getVertexAttributes() const
+std::vector<vk::VertexAttribute> ShaderModule::getVertexAttributes() const
 {
-	std::vector<VertexAttribute> attributes;
+	std::vector<vk::VertexAttribute> attributes;
 	if ( mShaderStage == VK_SHADER_STAGE_VERTEX_BIT ) {
 		uint32_t count	= 0;
 		auto	 spvRes = mReflection.EnumerateInputVariables( &count, nullptr );
@@ -144,49 +323,37 @@ std::vector<VertexAttribute> ShaderModule::getVertexAttributes() const
 			for ( size_t i = 0; i < inputVars.size(); ++i ) {
 				SpvReflectInterfaceVariable *pVar = inputVars[i];
 
-				// Skip invalid locations - there are usually system input variables 
-				// that's inaccessible to the shader.
-				if (pVar->location == UINT32_MAX) {
+				// Skip invalid locations - there are usually system input variables
+				// that's inaccessible to the shader anyway.
+				if ( pVar->location == UINT32_MAX ) {
 					continue;
 				}
 
-				VertexAttribute				 attr = {};
-				attr.name						  = pVar->name;
-				attr.location					  = pVar->location;
-				attr.format						  = static_cast<VkFormat>( pVar->format );
-				attr.semantic					  = geom::Attrib::USER_DEFINED;
+				std::string	 name	  = pVar->name;
+				uint32_t	 location = pVar->location;
+				VkFormat	 format	  = static_cast<VkFormat>( pVar->format );
+				geom::Attrib semantic = geom::Attrib::USER_DEFINED;
 
-				auto it = sDefaultAttribNameToSemanticMap.find( attr.name );
+				auto it = sDefaultAttribNameToSemanticMap.find( name );
 				if ( it != sDefaultAttribNameToSemanticMap.end() ) {
-					attr.semantic = it->second;
+					semantic = it->second;
 				}
 
-				attributes.push_back(attr);
+				vk::VertexAttribute attr = vk::VertexAttribute( name, location, format, semantic );
+				attributes.push_back( attr );
 			}
 		}
 	}
 	return attributes;
 }
 
-std::vector<DescriptorBinding> ShaderModule::getDescriptorBindings() const
+std::vector<vk::DescriptorBinding> ShaderModule::getDescriptorBindings() const
 {
-	uint32_t		 count	= 0;
-	SpvReflectResult spvres = mReflection.EnumerateDescriptorBindings( &count, nullptr );
-	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
-		throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding count failed" );
-	}
-
-	std::vector<SpvReflectDescriptorBinding *> spvBindings( count );
-	spvres = mReflection.EnumerateDescriptorBindings( &count, dataPtr( spvBindings ) );
-	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
-		throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding failed" );
-	}
-
 	std::vector<DescriptorBinding> bindings;
-	for ( uint32_t i = 0; i < count; ++i ) {
-		const SpvReflectDescriptorBinding *pSpvBinding = spvBindings[i];
+	for ( size_t i = 0; i < mSpirvBindings.size(); ++i ) {
+		const SpvReflectDescriptorBinding *pSpvBinding = mSpirvBindings[i];
 
-		DescriptorBinding binding = {};
+		vk::DescriptorBinding binding = {};
 
 		// clang-format off
 		switch ( pSpvBinding->descriptor_type ) {
@@ -212,10 +379,27 @@ std::vector<DescriptorBinding> ShaderModule::getDescriptorBindings() const
 		binding.set		= pSpvBinding->set;
 		binding.name	= pSpvBinding->name;
 
+		// Set binding name to block name if name is empty and is default uniform  block
+		if ( ( binding.type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ) && binding.name.empty() ) {
+			std::string blockName = spvReflectBlockVariableTypeName( &pSpvBinding->block );
+			if ( blockName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+				binding.name = blockName;
+			}
+		}
+
 		bindings.push_back( binding );
 	}
 
 	return bindings;
+}
+
+std::vector<const vk::UniformBlock *> ShaderModule::getUniformBlocks() const
+{
+	std::vector<const vk::UniformBlock *> blocks;
+	for ( const auto &block : mUniformBlocks ) {
+		blocks.push_back( block.get() );
+	}
+	return blocks;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -306,21 +490,28 @@ ShaderProg::ShaderProg( vk::DeviceRef device, const Format &format )
 		mVertexAttributes = mVS->getVertexAttributes();
 	}
 
-	addDescriptorBindings( mVS );
-	addDescriptorBindings( mPS );
-	addDescriptorBindings( mGS );
-	addDescriptorBindings( mHS );
-	addDescriptorBindings( mDS );
-	addDescriptorBindings( mCS );
+	parseDscriptorBindings( mVS.get() );
+	parseDscriptorBindings( mPS.get() );
+	parseDscriptorBindings( mGS.get() );
+	parseDscriptorBindings( mHS.get() );
+	parseDscriptorBindings( mDS.get() );
+	parseDscriptorBindings( mCS.get() );
+
+	parseUniformBlocks( mVS.get() );
+	parseUniformBlocks( mPS.get() );
+	parseUniformBlocks( mGS.get() );
+	parseUniformBlocks( mHS.get() );
+	parseUniformBlocks( mDS.get() );
+	parseUniformBlocks( mCS.get() );
 }
 
 ShaderProg::~ShaderProg()
 {
 }
 
-void ShaderProg::addDescriptorBindings( vk::ShaderModuleRef shader )
+void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
 {
-	if ( !shader ) {
+	if ( shader == nullptr ) {
 		return;
 	}
 
@@ -347,6 +538,76 @@ void ShaderProg::addDescriptorBindings( vk::ShaderModuleRef shader )
 				std::stringstream ss;
 				ss << "descriptor type mismatch where binding=" << binding.binding << ", set=" << binding.set;
 				throw VulkanExc( ss.str() );
+			}
+		}
+	}
+}
+
+void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
+{
+	if ( shader == nullptr ) {
+		return;
+	}
+
+	auto blocks = shader->getUniformBlocks();
+	for ( const auto &block : blocks ) {
+		if ( block->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+			// Add default uniform blcok if we don't have one...
+			if ( mDefaultUniformBlock == nullptr ) {
+				auto defaultUniformBlock = std::make_unique<UniformBlock>( *block );
+				mDefaultUniformBlock	 = defaultUniformBlock.get();
+
+				mUniformBlocks.push_back( std::move( defaultUniformBlock ) );
+			}
+			// ...otherwise validate that default uniform blocks have the same size and uniforms.
+			else {
+				auto it = std::find_if(
+					mUniformBlocks.begin(),
+					mUniformBlocks.end(),
+					[]( const std::unique_ptr<UniformBlock> &elem ) -> bool {
+						bool res = ( elem->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME );
+						return res;
+					} );
+
+				if ( it != mUniformBlocks.end() ) {
+					if ( block->getSize() != ( *it )->getSize() ) {
+						std::stringstream ss;
+						ss << "default uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet();
+						ss << " and binding=" << ( *it )->getBinding() << ", set=" << ( *it )->getSet();
+						ss << " do not have the same size";
+						throw VulkanExc( ss.str() );
+					}
+
+					if ( block->getUniforms() != ( *it )->getUniforms() ) {
+						std::stringstream ss;
+						ss << "default uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet();
+						ss << " and binding=" << ( *it )->getBinding() << ", set=" << ( *it )->getSet();
+						ss << " do not have the same uniforms";
+						throw VulkanExc( ss.str() );
+					}
+				}
+			}
+		}
+		else {
+			// Uniform blocks with the same binding/set must have same size and uniforms.
+			for ( const auto &existingBlock : mUniformBlocks ) {
+				bool isSameBinding = ( block->getBinding() == existingBlock->getBinding() );
+				bool isSameSet	   = ( block->getSet() == existingBlock->getSet() );
+				if ( !( isSameBinding && isSameSet ) ) {
+					continue;
+				}
+
+				if ( block->getSize() != existingBlock->getSize() ) {
+					std::stringstream ss;
+					ss << "uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet() << " do not have the same size";
+					throw VulkanExc( ss.str() );
+				}
+
+				if ( block->getUniforms() != existingBlock->getUniforms() ) {
+					std::stringstream ss;
+					ss << "uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet() << " do not have the same uniforms";
+					throw VulkanExc( ss.str() );
+				}
 			}
 		}
 	}
@@ -547,10 +808,10 @@ vk::ShaderModuleRef GlslProg::compileShader( vk::DeviceRef device, const std::st
 	glslang_shader_t *shader = glslang_shader_create( &input );
 
 	// Shift bindings
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SAMPLER, CINDER_CONTEXT_BINDING_SHIFT_SAMPLER );
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_TEXTURE, CINDER_CONTEXT_BINDING_SHIFT_IMAGE );
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_IMAGE, CINDER_CONTEXT_BINDING_SHIFT_TEXTURE );
+	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_TEXTURE, CINDER_CONTEXT_BINDING_SHIFT_TEXTURE );
 	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UBO, CINDER_CONTEXT_BINDING_SHIFT_UBO );
+	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_IMAGE, CINDER_CONTEXT_BINDING_SHIFT_IMAGE );
+	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SAMPLER, CINDER_CONTEXT_BINDING_SHIFT_SAMPLER );
 	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SSBO, CINDER_CONTEXT_BINDING_SHIFT_SSBO );
 	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UAV, CINDER_CONTEXT_BINDING_SHIFT_UAV );
 

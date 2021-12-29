@@ -22,6 +22,7 @@
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
 #include "vk_mem_alloc.h"
 
+#include <memory>
 #include <vector>
 
 #define VK_KHR_KHRONOS_VALIDATION_LAYER_NAME "VK_LAYER_KHRONOS_validation"
@@ -36,6 +37,26 @@
 #define CINDER_VK_QUEUE_MASK_TRANSFER ( VK_QUEUE_TRANSFER_BIT )
 #define CINDER_VK_ALL_SUB_RESOURCES	  0, VK_REMAINING_MIP_LEVELS, 0, VK_REMAINING_ARRAY_LAYERS
 
+#define CINDER_VK_DATA_TYPE_SIGNED_SHIFT	31
+#define CINDER_VK_DATA_TYPE_COMPOSITE_SHIFT 20
+#define CINDER_VK_DATA_TYPE_ROWS_SHIFT		16
+#define CINDER_VK_DATA_TYPE_COLUMNS_SHIFT	12
+#define CINDER_VK_DATA_TYPE_SCALAR_SHIFT	8
+#define CINDER_VK_DATA_TYPE_WIDTH_SHIFT		0
+
+#define CINDER_VK_MAKE_DATA_TYPE( SIGNED, COMPOSITE, ROWS, COLS, SCALAR, WIDTH )      \
+	( ( static_cast<uint32_t>( SIGNED ) << CINDER_VK_DATA_TYPE_SIGNED_SHIFT ) |       \
+	  ( static_cast<uint32_t>( COMPOSITE ) << CINDER_VK_DATA_TYPE_COMPOSITE_SHIFT ) | \
+	  ( static_cast<uint32_t>( ROWS ) << CINDER_VK_DATA_TYPE_ROWS_SHIFT ) |           \
+	  ( static_cast<uint32_t>( COLS ) << CINDER_VK_DATA_TYPE_COLUMNS_SHIFT ) |        \
+	  ( static_cast<uint32_t>( SCALAR ) << CINDER_VK_DATA_TYPE_SCALAR_SHIFT ) |       \
+	  ( static_cast<uint32_t>( WIDTH ) << CINDER_VK_DATA_TYPE_WIDTH_SHIFT ) ) *       \
+		( ( static_cast<uint32_t>( COMPOSITE ) > 0 ) *                                \
+		  ( static_cast<uint32_t>( ROWS ) > 0 ) *                                     \
+		  ( static_cast<uint32_t>( COLS ) > 0 ) *                                     \
+		  ( static_cast<uint32_t>( SCALAR ) > 0 ) *                                   \
+		  ( static_cast<uint32_t>( WIDTH ) > 0 ) )
+
 namespace cinder::app {
 
 class RendererVk;
@@ -43,6 +64,63 @@ class RendererVk;
 } // namespace cinder::app
 
 namespace cinder::vk {
+
+enum class ScalarType : uint32_t
+{
+	UNKNOWN = 0,
+	BOOL	= 1,
+	INT		= 2,
+	FLOAT	= 3,
+};
+
+enum class CompositeType : uint32_t
+{
+	UNKNOWN = 0,
+	SCALAR	= 1,
+	VECTOR	= 2,
+	MATRIX	= 3,
+};
+
+enum class DataType : uint32_t
+{
+	UNKNOWN = 0,
+
+	BOOL1 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::SCALAR, 1, 1, ScalarType::BOOL, 32 ),
+	BOOL2 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::VECTOR, 2, 1, ScalarType::BOOL, 32 ),
+	BOOL3 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::VECTOR, 3, 1, ScalarType::BOOL, 32 ),
+	BOOL4 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::VECTOR, 4, 1, ScalarType::BOOL, 32 ),
+	BOOL  = BOOL1,
+
+	INT1 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::SCALAR, 1, 1, ScalarType::INT, 32 ),
+	INT2 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::VECTOR, 2, 1, ScalarType::INT, 32 ),
+	INT3 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::VECTOR, 3, 1, ScalarType::INT, 32 ),
+	INT4 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::VECTOR, 4, 1, ScalarType::INT, 32 ),
+	INT	 = INT1,
+
+	UINT1 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::SCALAR, 1, 1, ScalarType::INT, 32 ),
+	UINT2 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::VECTOR, 2, 1, ScalarType::INT, 32 ),
+	UINT3 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::VECTOR, 3, 1, ScalarType::INT, 32 ),
+	UINT4 = CINDER_VK_MAKE_DATA_TYPE( 0, CompositeType::VECTOR, 4, 1, ScalarType::INT, 32 ),
+	UINT  = UINT1,
+
+	FLOAT1 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::SCALAR, 1, 1, ScalarType::FLOAT, 32 ),
+	FLOAT2 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::VECTOR, 2, 1, ScalarType::FLOAT, 32 ),
+	FLOAT3 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::VECTOR, 3, 1, ScalarType::FLOAT, 32 ),
+	FLOAT4 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::VECTOR, 4, 1, ScalarType::FLOAT, 32 ),
+	FLOAT  = FLOAT1,
+
+	FLOAT2x2 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 2, 2, ScalarType::FLOAT, 32 ),
+	FLOAT2x3 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 2, 3, ScalarType::FLOAT, 32 ),
+	FLOAT2x4 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 2, 4, ScalarType::FLOAT, 32 ),
+
+	FLOAT3x2 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 3, 2, ScalarType::FLOAT, 32 ),
+	FLOAT3x3 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 3, 3, ScalarType::FLOAT, 32 ),
+	FLOAT3x4 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 3, 4, ScalarType::FLOAT, 32 ),
+
+	FLOAT4x2 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 4, 2, ScalarType::FLOAT, 32 ),
+	FLOAT4x3 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 4, 3, ScalarType::FLOAT, 32 ),
+	FLOAT4x4 = CINDER_VK_MAKE_DATA_TYPE( 1, CompositeType::MATRIX, 4, 4, ScalarType::FLOAT, 32 ),
+};
 
 enum class MemoryUsage
 {
@@ -79,6 +157,10 @@ class Semaphore;
 class ShaderModule;
 class ShaderProg;
 class Swapchain;
+class Texture1d;
+class Texture2d;
+class Texture3d;
+class UniformBuffer;
 
 using BatchRef				 = std::shared_ptr<Batch>;
 using BufferRef				 = std::shared_ptr<Buffer>;
@@ -87,7 +169,7 @@ using BufferedRenderPassRef	 = std::shared_ptr<BufferedRenderPass>;
 using CommandBufferRef		 = std::shared_ptr<CommandBuffer>;
 using CommandPoolRef		 = std::shared_ptr<CommandPool>;
 using ContextRef			 = std::shared_ptr<Context>;
-using CountingSemaphoreRef   = std::shared_ptr<CountingSemaphore>;
+using CountingSemaphoreRef	 = std::shared_ptr<CountingSemaphore>;
 using DescriptorPoolRef		 = std::shared_ptr<DescriptorPool>;
 using DescriptorSetRef		 = std::shared_ptr<DescriptorSet>;
 using DescriptorSetLayoutRef = std::shared_ptr<DescriptorSetLayout>;
@@ -106,6 +188,7 @@ using SemaphoreRef			 = std::shared_ptr<Semaphore>;
 using ShaderModuleRef		 = std::shared_ptr<ShaderModule>;
 using ShaderProgRef			 = std::shared_ptr<ShaderProg>;
 using SwapchainRef			 = std::shared_ptr<Swapchain>;
+using UniformBufferRef		 = std::shared_ptr<UniformBuffer>;
 
 class CI_API VulkanExc : public cinder::Exception
 {

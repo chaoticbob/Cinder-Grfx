@@ -272,7 +272,7 @@ const std::map<VkFormat, FormatInfo> kFormatInfo = {
 };
 // clang-format on
 
-VmaMemoryUsage toVmaMemoryUsage( MemoryUsage value )
+VmaMemoryUsage toVmaMemoryUsage( vk::MemoryUsage value )
 {
 	// clang-format off
     switch (value) {
@@ -291,7 +291,61 @@ VkSampleCountFlagBits toVkSampleCount( uint32_t samples )
 	samples							  = ( samples == 0 ) ? 1 : samples;
 	samples							  = ( samples > 2 ) ? grfx::roundUpPow2( samples ) : samples;
 	VkSampleCountFlagBits sampleCount = static_cast<VkSampleCountFlagBits>( samples );
-    return sampleCount;
+	return sampleCount;
+}
+
+VkPrimitiveTopology toVkPrimitive( geom::Primitive value )
+{
+	// clang-format off
+    switch (value) {
+        default: break;
+        case geom::Primitive::LINES          : return VK_PRIMITIVE_TOPOLOGY_LINE_LIST; break;
+        case geom::Primitive::LINE_STRIP     : return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP; break;
+        case geom::Primitive::TRIANGLES      : return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST; break;
+        case geom::Primitive::TRIANGLE_STRIP : return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP; break;
+        case geom::Primitive::TRIANGLE_FAN   : return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN; break;
+    }
+	// clang-format on
+	return static_cast<VkPrimitiveTopology>( ~0 );
+}
+
+VkFormat toVkFormat( const geom::AttribInfo &attribInfo )
+{
+	auto dataType = attribInfo.getDataType();
+	auto dims	  = attribInfo.getDims();
+
+	switch ( dataType ) {
+		default: break;
+		case geom::DataType::FLOAT: {
+			switch ( dims ) {
+				default: break;
+				case 1: return VK_FORMAT_R32_SFLOAT; break;
+				case 2: return VK_FORMAT_R32G32_SFLOAT; break;
+				case 3: return VK_FORMAT_R32G32B32_SFLOAT; break;
+				case 4: return VK_FORMAT_R32G32B32A32_SFLOAT; break;
+			}
+		} break;
+        case geom::DataType::INTEGER: {
+			switch ( dims ) {
+				default: break;
+				case 1: return VK_FORMAT_R32_SINT; break;
+				case 2: return VK_FORMAT_R32G32_SINT; break;
+				case 3: return VK_FORMAT_R32G32B32_SINT; break;
+				case 4: return VK_FORMAT_R32G32B32A32_SINT; break;
+			}
+		} break;
+        case geom::DataType::DOUBLE: {
+			switch ( dims ) {
+				default: break;
+				case 1: return VK_FORMAT_R64_SFLOAT; break;
+				case 2: return VK_FORMAT_R64G64_SFLOAT; break;
+				case 3: return VK_FORMAT_R64G64B64_SFLOAT; break;
+				case 4: return VK_FORMAT_R64G64B64A64_SFLOAT; break;
+			}
+		} break;
+	}
+
+    return VK_FORMAT_UNDEFINED;
 }
 
 uint32_t formatSize( VkFormat format )

@@ -88,6 +88,7 @@ public:
 	VkInstance						  getInstanceHandle() const;
 	VkPhysicalDevice				  getGpuHandle() const;
 	const VkPhysicalDeviceProperties &getDeviceProperties() const;
+	const VkPhysicalDeviceLimits &	  getDeviceLimits() const;
 	VkDevice						  getDeviceHandle() const;
 	const VkPhysicalDeviceFeatures &  getDeviceFeatures() const;
 	std::string						  getDeviceName() const;
@@ -144,17 +145,38 @@ public:
 	void *beginCopyToBuffer( uint64_t size, vk::Buffer *pDstBuffer );
 	void  endCopyToBuffer( uint64_t size, vk::Buffer *pDstBuffer );
 
+	void copyBufferToBuffer(
+		uint64_t	size,
+		vk::Buffer *pSrcBuffer,
+		uint64_t	srcOffset,
+		vk::Buffer *pDstBuffer,
+		uint64_t	dstOffset );
+
 	//! Use this if the copy to image is straight forward
 	void copyToImage(
 		uint32_t	srcWidth,
 		uint32_t	srcHeight,
 		uint32_t	srcRowBytes,
 		const void *pSrcData,
+		uint32_t	dstMipLevel,
+		uint32_t	dstArrayLayer,
 		vk::Image * pDstImage );
 
 	//! Use these if copy requires using mapped pointer from staging buffer as storage
-	void *beginCopyToImage( uint32_t srcWidth, uint32_t srcHeight, uint32_t srcRowBytes, vk::Image *pDstImage );
-	void  endCopyToImage( uint32_t srcWidth, uint32_t srcHeight, uint32_t srcRowBytes, vk::Image *pDstImage );
+	void *beginCopyToImage(
+		uint32_t   srcWidth,
+		uint32_t   srcHeight,
+		uint32_t   srcRowBytes,
+		uint32_t   dstMipLevel,
+		uint32_t   dstArrayLayer,
+		vk::Image *pDstImage );
+	void endCopyToImage(
+		uint32_t   srcWidth,
+		uint32_t   srcHeight,
+		uint32_t   srcRowBytes,
+		uint32_t   dstMipLevel,
+		uint32_t   dstArrayLayer,
+		vk::Image *pDstImage );
 
 	SamplerCache *getSamplerCache() const { return mSamplerCache.get(); }
 
@@ -171,16 +193,20 @@ private:
 
 	void initializeStagingBuffer();
 
-	void internalCopyToBuffer(
+	void internalCopyBuffer(
 		uint64_t	size,
 		vk::Buffer *pSrcBuffer,
-		vk::Buffer *pDstBuffer );
+		uint64_t	srcOffset,
+		vk::Buffer *pDstBuffer,
+		uint64_t	dstOffset );
 
 	void internalCopyToImage(
 		uint32_t	srcWidth,
 		uint32_t	srcHeight,
 		uint32_t	srcRowBytes,
 		vk::Buffer *pSrcBuffer,
+		uint32_t	dstMipLevel,
+		uint32_t	dstArrayLayer,
 		vk::Image * pDstImage );
 
 private:

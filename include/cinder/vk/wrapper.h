@@ -8,9 +8,10 @@
 
 namespace cinder::vk {
 
-class Context;
+/////////////////////////////////////////////////////////////////////////////////////////////////
+// Context functions
 
-Context *context();
+class Context *context();
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Command buffer functions
@@ -27,6 +28,8 @@ CI_API void clearColor( const ColorA &color );
 CI_API void clearDepth( const double depth );
 CI_API void clearDepth( const float depth );
 CI_API void clearStencil( const int s );
+
+CI_API std::pair<ivec2, ivec2> getViewport();
 
 //! Disables reading / testing from the depth buffer. Disables \c GL_DEPTH_TEST
 CI_API void disableDepthRead();
@@ -66,5 +69,15 @@ CI_API void popMatrices();
 CI_API void multModelMatrix( const ci::mat4 &mtx );
 CI_API void multViewMatrix( const ci::mat4 &mtx );
 CI_API void multProjectionMatrix( const ci::mat4 &mtx );
+
+CI_API mat4 getModelMatrix();
+CI_API mat4 getViewMatrix();
+CI_API mat4 getProjectionMatrix();
+CI_API mat4 getModelView();
+CI_API mat4 getModelViewProjection();
+CI_API mat4 calcViewMatrixInverse();
+CI_API mat3 calcModelMatrixInverseTranspose();
+CI_API mat3 calcNormalMatrix();
+CI_API mat4 calcViewportMatrix();
 
 } // namespace cinder::vk

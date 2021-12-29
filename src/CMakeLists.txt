@@ -114,7 +114,9 @@ list(APPEND VK_HDR_FILES
     ${INC_PATH}/cinder/vk/Swapchain.h
     ${INC_PATH}/cinder/vk/Sync.h
     ${INC_PATH}/cinder/vk/Texture.h
-    ${INC_PATH}/cinder/vk/Util.h    
+    ${INC_PATH}/cinder/vk/Util.h
+    ${INC_PATH}/cinder/vk/UniformBlock.h
+    ${INC_PATH}/cinder/vk/UniformBuffer.h
     ${INC_PATH}/cinder/vk/scoped.h
     ${INC_PATH}/cinder/vk/wrapper.h
     ${CINDER_GRFX_PATH}/third_party/xxHash/xxhash.h
@@ -143,6 +145,8 @@ list(APPEND VK_SRC_FILES
     ${SRC_PATH}/cinder/vk/Sync.cpp
     ${SRC_PATH}/cinder/vk/Texture.cpp
     ${SRC_PATH}/cinder/vk/Util.cpp
+    ${SRC_PATH}/cinder/vk/UniformBlock.cpp
+    ${SRC_PATH}/cinder/vk/UniformBuffer.cpp
     ${SRC_PATH}/cinder/vk/scoped.cpp
     ${SRC_PATH}/cinder/vk/wrapper.cpp
     ${CINDER_GRFX_PATH}/third_party/glslang/glslang/CInterface/glslang_c_interface.cpp

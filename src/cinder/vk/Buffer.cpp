@@ -3,7 +3,12 @@
 #include "cinder/vk/Util.h"
 #include "cinder/app/RendererVk.h"
 
+#include <sstream>
+
 namespace cinder::vk {
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Buffer
 
 vk::BufferRef Buffer::create( uint64_t size, const vk::Buffer::Usage &bufferUsage, vk::MemoryUsage memoryUsage, vk::DeviceRef device )
 {
@@ -109,6 +114,10 @@ Buffer::~Buffer()
 
 void Buffer::map( void **ppMappedAddress )
 {
+	if ( mMemoryUsage == vk::MemoryUsage::GPU_ONLY ) {
+		throw VulkanExc( "GPU ONLY buffers cannot be mapped or unmapped" );
+	}
+
 	if ( ppMappedAddress == nullptr ) {
 		throw VulkanExc( "unexpected null argument: ppMappedAddress" );
 	}
@@ -130,6 +139,10 @@ void Buffer::map( void **ppMappedAddress )
 
 void Buffer::unmap()
 {
+	if ( mMemoryUsage == vk::MemoryUsage::GPU_ONLY ) {
+		throw VulkanExc( "GPU ONLY buffers cannot be mapped or unmapped" );
+	}
+
 	if ( mMappedAddress == nullptr ) {
 		return;
 	}
@@ -142,5 +155,176 @@ void Buffer::copyData( uint64_t size, const void *pData )
 {
 	getDevice()->copyToBuffer( size, pData, this );
 }
+
+void Buffer::ensureMinimumSize( uint64_t minimumSize )
+{
+	if ( minimumSize > mSize ) {
+		throw VulkanExc( "implement me" );
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// DynamicBuffer
+
+DynamicBuffer::DynamicBuffer( vk::DeviceRef device, uint64_t size, const vk::Buffer::Usage &bufferUsage )
+	: vk::DeviceChildObject( device )
+{
+	vk::Buffer::Usage cpuUsage = vk::Buffer::Usage().uniformBuffer().transferSrc();
+	mCpuBuffer				   = vk::Buffer::create( size, cpuUsage, vk::MemoryUsage::CPU_TO_GPU, device );
+
+	vk::Buffer::Usage gpuUsage = vk::Buffer::Usage().uniformBuffer().transferDst();
+	mGpuBuffer				   = vk::Buffer::create( size, cpuUsage, vk::MemoryUsage::GPU_ONLY, device );
+
+	mCpuBuffer->map( &mMappedAddress );
+}
+
+DynamicBuffer::~DynamicBuffer()
+{
+	if ( mMappedAddress != nullptr ) {
+		mCpuBuffer->unmap();
+		mMappedAddress = nullptr;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// UniformBuffer
+
+/*
+* 
+vk::UniformBufferRef UniformBuffer::create( uint32_t size, const Layout &layout, vk::DeviceRef device )
+{
+	if ( !device ) {
+		device = app::RendererVk::getCurrentRenderer()->getDevice();
+	}
+
+	return UniformBufferRef( new UniformBuffer( device, size, layout ) );
+}
+
+UniformBuffer::UniformBuffer( vk::DeviceRef device, uint32_t size, const Layout &layout )
+	: vk::DeviceChildObject( device ),
+	  mSize( size ),
+	  mLayout( layout )
+{
+	const uint32_t maxSize = getDevice()->getDeviceLimits().maxUniformBufferRange;
+	if ( mSize > maxSize ) {
+		std::stringstream ss;
+		ss << "uniform buffer size exceeds device limit of " << maxSize;
+		throw VulkanExc( ss.str() );
+	}
+
+	vk::Buffer::Usage cpuUsage = vk::Buffer::Usage().uniformBuffer().transferSrc();
+	mCpuBuffer				   = vk::Buffer::create( size, cpuUsage, vk::MemoryUsage::CPU_TO_GPU, device );
+
+	vk::Buffer::Usage gpuUsage = vk::Buffer::Usage().uniformBuffer().transferDst();
+	mGpuBuffer				   = vk::Buffer::create( size, cpuUsage, vk::MemoryUsage::GPU_ONLY, device );
+
+	mCpuBuffer->map( &mMappedAddress );
+}
+
+UniformBuffer::~UniformBuffer()
+{
+	if ( mMappedAddress != nullptr ) {
+		mCpuBuffer->unmap();
+		mMappedAddress = nullptr;
+	}
+}
+
+bool UniformBuffer::exists( const std::string &name ) const
+{
+	auto it	   = mLayout.mUniforms.find( name );
+	bool found = ( it != mLayout.mUniforms.end() );
+	return found;
+}
+
+template <typename T>
+void UniformBuffer::uniform( const std::string &name, const T &value )
+{
+	auto it = mLayout.mUniforms.find( name );
+	if ( it == mLayout.mUniforms.end() ) {
+		std::stringstream ss;
+		ss << "couldn't find uniform variable: " << name;
+		throw VulkanExc( ss.str() );
+	}
+
+	uint32_t valueSize	 = static_cast<uint32_t>( sizeof( value ) );
+	uint32_t startOffset = it->second.offset;
+	uint32_t endOffset	 = startOffset + valueSize;
+	if ( endOffset > mSize ) {
+		std::stringstream ss;
+		ss << "end offset (" << endOffset << ") exceeds buffer size (" << mSize << ")";
+		throw VulkanExc( ss.str() );
+	}
+
+	const char *pSrc = reinterpret_cast<const char *>( &value );
+	char *		pDst = static_cast<char *>( mMappedAddress ) + startOffset;
+	memcpy( pDst, pSrc, valueSize );
+}
+
+void UniformBuffer::uniform( const std::string &name, float value )
+{
+	uniform<float>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::vec2 &value )
+{
+	uniform<glm::vec2>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::vec3 &value )
+{
+	uniform<glm::vec3>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::vec4 &value )
+{
+	uniform<glm::vec4>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat2x2 &value )
+{
+	uniform<glm::mat2x2>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat2x3 &value )
+{
+	uniform<glm::mat2x3>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat2x4 &value )
+{
+	uniform<glm::mat2x4>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat3x2 &value )
+{
+	uniform<glm::mat3x2>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat3x3 &value )
+{
+	uniform<glm::mat3x3>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat3x4 &value )
+{
+	uniform<glm::mat3x4>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat4x2 &value )
+{
+	uniform<glm::mat4x2>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat4x3 &value )
+{
+	uniform<glm::mat4x3>( name, value );
+}
+
+void UniformBuffer::uniform( const std::string &name, const glm::mat4x4 &value )
+{
+	uniform<glm::mat4x4>( name, value );
+}
+
+*/
 
 } // namespace cinder::vk

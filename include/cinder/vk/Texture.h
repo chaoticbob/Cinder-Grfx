@@ -25,7 +25,7 @@ public:
 		Format() {}
 
 		void samples( VkSampleCountFlagBits value ) { mSamples = value; }
-		void mipmap( bool enable ) { mMipLevels = enable ? 1 : CINDER_REMAINING_MIP_LEVELS; }
+		void mipmap( bool enable ) { mMipLevels = enable ? CINDER_REMAINING_MIP_LEVELS : 1; }
 		void mipLevels( uint32_t value ) { mMipLevels = value; }
 		void arrayLayers( uint32_t value ) { mArrayLayers = value; }
 		void imageUsage( VkImageUsageFlags value ) { mImageUsageFlags = value; }
@@ -73,9 +73,9 @@ public:
 
 		// Sampler properties
 		vk::SamplerRef		 mSampler;
-		VkFilter			 mMinFilter				  = VK_FILTER_NEAREST;
-		VkFilter			 mMagFilter				  = VK_FILTER_NEAREST;
-		VkSamplerMipmapMode	 mMipMapMode			  = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		VkFilter			 mMinFilter				  = VK_FILTER_LINEAR;
+		VkFilter			 mMagFilter				  = VK_FILTER_LINEAR;
+		VkSamplerMipmapMode	 mMipMapMode			  = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 		VkSamplerAddressMode mAddressModeU			  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 		VkSamplerAddressMode mAddressModeV			  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
 		VkSamplerAddressMode mAddressModeW			  = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -90,8 +90,8 @@ public:
 	vk::ImageRef   getImage() const { return mImage; }
 	vk::SamplerRef getSampler() const { return mSampler; }
 
-	void bind( uint32_t binding = 0, uint32_t set = 0 );
-	void unbind( uint32_t binding ) { (void)binding; } // Does nothing
+	virtual void bind( uint32_t binding = 0 ) = 0;
+	void		 unbind( uint32_t binding );
 
 protected:
 	TextureBase( vk::DeviceRef device, uint32_t width );
@@ -173,6 +173,8 @@ public:
 	int32_t getWidth() const { return mCleanBounds.getWidth(); }
 	int32_t getHeight() const { return mCleanBounds.getHeight(); }
 
+	virtual void bind( uint32_t binding = 0 ) override;
+
 protected:
 	Texture2d( vk::DeviceRef device, int width, int height, Format format = Format() );
 	Texture2d( vk::DeviceRef device, const void *data, VkFormat dataFormat, int width, int height, Format format = Format() );
@@ -183,6 +185,8 @@ protected:
 	Texture2d( vk::DeviceRef device, const Channel16u &channel, Format format = Format() );
 	Texture2d( vk::DeviceRef device, const Channel32f &channel, Format format = Format() );
 	Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, Format format = Format() );
+
+	void initViews();
 
 private:
 	Texture2d::Format mFormat;

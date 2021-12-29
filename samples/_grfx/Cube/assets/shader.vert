@@ -14,16 +14,17 @@ Compile:
 in vec4 ciPosition;
 in vec2 ciTexCoord0;
 in vec3 ciNormal;
-in vec4 ciColor;
+//in vec4 ciColor;
 
 out highp vec2	TexCoord;
-out lowp  vec4	Color;
+//out lowp  vec4	Color;
+out highp vec4	Color;
 out highp vec3	Normal;
 
 void main( void )
 {
 	gl_Position	= ciModelViewProjection * ciPosition;
-	Color 		= ciColor;
+	Color 		= vec4(1, 1, 1, 1); //ciColor;
 	TexCoord	= ciTexCoord0;
 	Normal		= ciNormalMatrix * ciNormal;
 }

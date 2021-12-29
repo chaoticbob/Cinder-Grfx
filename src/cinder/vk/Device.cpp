@@ -17,6 +17,16 @@
 
 #include <algorithm>
 
+// Staging buffers must use CPU_ONLY so it correctly
+// translates to VMA's CPU_ONLY value. We use CPU_ONLY
+// because VMA uses CPU_TO_GPU for object that update
+// every frame. On most GPUs, CPU_TO_GPU will allocate
+// from a device local / host visible heap. These
+// heaps are generally <= 256 MB. This would be problematic
+// for large uploads.
+//
+#define CI_STAGING_BUFFER_MEMORY_USAGE MemoryUsage::CPU_ONLY
+
 namespace cinder::vk {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,8 +121,8 @@ struct ExtensionFeatures
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT	 descriptorIndexing	   = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT };
 	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT	 extendedDynamciState  = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT };
 	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamciState2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT };
-	VkPhysicalDeviceExternalMemoryHostPropertiesEXT	 externalMemoryHost	   = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_MEMORY_HOST_PROPERTIES_EXT };
 	VkPhysicalDeviceDynamicRenderingFeaturesKHR		 dynamicRendering	   = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR };
+	VkPhysicalDeviceSynchronization2FeaturesKHR		 synchronization2	   = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR };
 	VkPhysicalDeviceTimelineSemaphoreFeaturesKHR	 timelineSemaphore	   = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES_KHR };
 
 	ExtensionFeatures( uint32_t apiVersion = VK_API_VERSION_1_1 )
@@ -121,18 +131,18 @@ struct ExtensionFeatures
 			pNextStart					= &descriptorIndexing;
 			descriptorIndexing.pNext	= &extendedDynamciState;
 			extendedDynamciState.pNext	= &extendedDynamciState2;
-			extendedDynamciState2.pNext = &externalMemoryHost;
-			externalMemoryHost.pNext	= &dynamicRendering;
-			dynamicRendering.pNext		= &timelineSemaphore;
+			extendedDynamciState2.pNext = &dynamicRendering;
+			dynamicRendering.pNext		= &synchronization2;
+			synchronization2.pNext		= &timelineSemaphore;
 			timelineSemaphore.pNext		= nullptr;
 		}
 		else if ( apiVersion == VK_API_VERSION_1_2 ) {
 			pNextStart					= &descriptorIndexing;
 			descriptorIndexing.pNext	= &extendedDynamciState;
 			extendedDynamciState.pNext	= &extendedDynamciState2;
-			extendedDynamciState2.pNext = &externalMemoryHost;
-			externalMemoryHost.pNext	= &dynamicRendering;
-			dynamicRendering.pNext		= nullptr;
+			extendedDynamciState2.pNext = &dynamicRendering;
+			dynamicRendering.pNext		= &synchronization2;
+			synchronization2.pNext		= nullptr;
 		}
 	}
 };
@@ -159,7 +169,7 @@ static void configureExtensions(
 		extensions.push_back( VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME );
 		extensions.push_back( VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME );
-		extensions.push_back( VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
+		//extensions.push_back( VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME );
 		extensions.push_back( VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME );
 	}
@@ -463,6 +473,11 @@ VkPhysicalDevice Device::getGpuHandle() const
 const VkPhysicalDeviceProperties &Device::getDeviceProperties() const
 {
 	return mDeviceProperties;
+}
+
+const VkPhysicalDeviceLimits &Device::getDeviceLimits() const
+{
+	return mDeviceProperties.limits;
 }
 
 VkDevice Device::getDeviceHandle() const
@@ -782,15 +797,17 @@ void Device::initializeStagingBuffer()
 		mStagingBuffer = vk::Buffer::create(
 			mStagingBufferSize,
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-			MemoryUsage::CPU_TO_GPU,
+			CI_STAGING_BUFFER_MEMORY_USAGE,
 			shared_from_this() );
 	}
 }
 
-void Device::internalCopyToBuffer(
+void Device::internalCopyBuffer(
 	uint64_t	size,
 	vk::Buffer *pSrcBuffer,
-	vk::Buffer *pDstBuffer )
+	uint64_t	srcOffset,
+	vk::Buffer *pDstBuffer,
+	uint64_t	dstOffset )
 {
 	size = std::min<uint64_t>( size, std::min<uint64_t>( pSrcBuffer->getSize(), pDstBuffer->getSize() ) );
 
@@ -806,8 +823,8 @@ void Device::internalCopyToBuffer(
 
 	// Copy command
 	VkBufferCopy region = {};
-	region.srcOffset	= 0;
-	region.dstOffset	= 0;
+	region.srcOffset	= srcOffset;
+	region.dstOffset	= dstOffset;
 	region.size			= static_cast<VkDeviceSize>( size );
 
 	vkfn()->CmdCopyBuffer(
@@ -852,7 +869,7 @@ void Device::copyToBuffer(
 	// Figure out which staging buffer to use
 	vk::BufferRef stagingBuffer = mStagingBuffer;
 	if ( copySize > mStagingBufferSize ) {
-		stagingBuffer = vk::Buffer::create( copySize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::CPU_TO_GPU, shared_from_this() );
+		stagingBuffer = vk::Buffer::create( copySize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, CI_STAGING_BUFFER_MEMORY_USAGE, shared_from_this() );
 	}
 
 	// Map staging buffer
@@ -863,7 +880,7 @@ void Device::copyToBuffer(
 	memcpy( pMappedAddress, pSrcData, copySize );
 
 	// Do the copy
-	internalCopyToBuffer( copySize, stagingBuffer.get(), pDstBuffer );
+	internalCopyBuffer( copySize, stagingBuffer.get(), 0, pDstBuffer, 0 );
 
 	// Unmap staging buffer
 	stagingBuffer->unmap();
@@ -875,7 +892,7 @@ void *Device::beginCopyToBuffer( uint64_t size, vk::Buffer *pDstBuffer )
 	initializeStagingBuffer();
 
 	if ( size > mStagingBufferSize ) {
-		mOversizedStagingBuffer = vk::Buffer::create( size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::CPU_TO_GPU, shared_from_this() );
+		mOversizedStagingBuffer = vk::Buffer::create( size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, CI_STAGING_BUFFER_MEMORY_USAGE, shared_from_this() );
 	}
 
 	vk::BufferRef stagingBuffer = mOversizedStagingBuffer ? mOversizedStagingBuffer : mStagingBuffer;
@@ -890,7 +907,7 @@ void Device::endCopyToBuffer( uint64_t size, vk::Buffer *pDstBuffer )
 {
 	vk::BufferRef stagingBuffer = mOversizedStagingBuffer ? mOversizedStagingBuffer : mStagingBuffer;
 
-	internalCopyToBuffer( size, stagingBuffer.get(), pDstBuffer );
+	internalCopyBuffer( size, stagingBuffer.get(), 0, pDstBuffer, 0 );
 
 	stagingBuffer->unmap();
 
@@ -901,17 +918,29 @@ void Device::endCopyToBuffer( uint64_t size, vk::Buffer *pDstBuffer )
 	mCopyMutex.unlock();
 }
 
+void Device::copyBufferToBuffer(
+	uint64_t	size,
+	vk::Buffer *pSrcBuffer,
+	uint64_t	srcOffset,
+	vk::Buffer *pDstBuffer,
+	uint64_t	dstOffset )
+{
+	std::lock_guard<std::mutex> lock( mCopyMutex );
+	initializeStagingBuffer();
+
+	internalCopyBuffer( size, pSrcBuffer, srcOffset, pDstBuffer, dstOffset );
+}
+
 void Device::internalCopyToImage(
 	uint32_t	srcWidth,
 	uint32_t	srcHeight,
 	uint32_t	srcRowBytes,
 	vk::Buffer *pSrcBuffer,
+	uint32_t	dstMipLevel,
+	uint32_t	dstArrayLayer,
 	vk::Image * pDstImage )
 {
-	const uint32_t	   dstWidth	   = pDstImage->getExtent().width;
-	const uint32_t	   dstHeight   = pDstImage->getExtent().height;
-	const uint32_t	   dstRowBytes = pDstImage->getRowStride();
-	VkImageAspectFlags aspectMask  = pDstImage->getAspectMask();
+	VkImageAspectFlags aspectMask = pDstImage->getAspectMask();
 
 	// Begin command buffer
 	VkCommandBufferBeginInfo beginInfo = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
@@ -923,16 +952,19 @@ void Device::internalCopyToImage(
 		throw VulkanFnFailedExc( "vkBeginCommandBuffer", vkres );
 	}
 
+	const uint32_t dstNumMipLevels = pDstImage->getMipLevels();
+	const uint32_t dstNumArrayLayers = pDstImage->getArrayLayers();
+
 	// Transition image layout to VK_IMAGE_LAYOUT_TRANSFER_DST
 	vk::cmdTransitionImageLayout(
 		vkfn()->CmdPipelineBarrier,
-		mTransitionCommanBuffer,
+		mCopyCommandBuffer,
 		pDstImage->getImageHandle(),
 		aspectMask,
 		0,
-		1,
+		dstNumMipLevels,
 		0,
-		1,
+		dstNumArrayLayers,
 		VK_IMAGE_LAYOUT_UNDEFINED,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		VK_PIPELINE_STAGE_TRANSFER_BIT );
@@ -943,11 +975,11 @@ void Device::internalCopyToImage(
 	region.bufferRowLength				   = srcWidth;
 	region.bufferImageHeight			   = srcHeight;
 	region.imageSubresource.aspectMask	   = aspectMask;
-	region.imageSubresource.mipLevel	   = 0;
-	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.mipLevel	   = dstMipLevel;
+	region.imageSubresource.baseArrayLayer = dstArrayLayer;
 	region.imageSubresource.layerCount	   = 1;
 	region.imageOffset					   = { 0, 0, 0 };
-	region.imageExtent					   = { dstWidth, dstHeight, 1 };
+	region.imageExtent					   = { srcWidth, srcHeight, 1 };
 
 	vkfn()->CmdCopyBufferToImage(
 		mCopyCommandBuffer,
@@ -960,13 +992,13 @@ void Device::internalCopyToImage(
 	// Transition image layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 	vk::cmdTransitionImageLayout(
 		vkfn()->CmdPipelineBarrier,
-		mTransitionCommanBuffer,
+		mCopyCommandBuffer,
 		pDstImage->getImageHandle(),
 		aspectMask,
 		0,
-		1,
+		dstNumMipLevels,
 		0,
-		1,
+		dstNumArrayLayers,
 		VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 		VK_PIPELINE_STAGE_VERTEX_SHADER_BIT );
@@ -998,6 +1030,8 @@ void Device::copyToImage(
 	uint32_t	srcHeight,
 	uint32_t	srcRowBytes,
 	const void *pSrcData,
+	uint32_t	dstMipLevel,
+	uint32_t	dstArrayLayer,
 	vk::Image * pDstImage )
 {
 	std::lock_guard<std::mutex> lock( mCopyMutex );
@@ -1006,6 +1040,12 @@ void Device::copyToImage(
 	uint32_t dstWidth	 = pDstImage->getExtent().width;
 	uint32_t dstHeight	 = pDstImage->getExtent().height;
 	uint32_t dstRowBytes = pDstImage->getRowStride();
+
+	for ( uint32_t i = 0; i < dstMipLevel; ++i ) {
+		dstWidth >>= 1;
+		dstHeight >>= 1;
+		dstRowBytes >>= 1;
+	}
 
 	bool isWidthSame	= ( srcWidth == dstWidth );
 	bool isHeightSame	= ( srcHeight == dstHeight );
@@ -1030,21 +1070,40 @@ void Device::copyToImage(
 	memcpy( pMappedAddress, pSrcData, srcDataSize );
 
 	// Do the copy
-	internalCopyToImage( srcWidth, srcHeight, srcRowBytes, stagingBuffer.get(), pDstImage );
+	internalCopyToImage(
+		srcWidth,
+		srcHeight,
+		srcRowBytes,
+		stagingBuffer.get(),
+		dstMipLevel,
+		dstArrayLayer,
+		pDstImage );
 
 	// Unmap staging buffer
 	stagingBuffer->unmap();
 }
 
-void *Device::beginCopyToImage( uint32_t srcWidth, uint32_t srcHeight, uint32_t srcRowBytes, vk::Image *pDstImage )
+void *Device::beginCopyToImage(
+	uint32_t   srcWidth,
+	uint32_t   srcHeight,
+	uint32_t   srcRowBytes,
+	uint32_t   dstMipLevel,
+	uint32_t   dstArrayLevel,
+	vk::Image *pDstImage )
 {
-	uint32_t dstWidth	  = pDstImage->getExtent().width;
-	uint32_t dstHeight	  = pDstImage->getExtent().height;
-	uint32_t dstRowStride = pDstImage->getRowStride();
+	uint32_t dstWidth	 = pDstImage->getExtent().width;
+	uint32_t dstHeight	 = pDstImage->getExtent().height;
+	uint32_t dstRowBytes = pDstImage->getRowStride();
+
+	for ( uint32_t i = 0; i < dstMipLevel; ++i ) {
+		dstWidth >>= 1;
+		dstHeight >>= 1;
+		dstRowBytes >>= 1;
+	}
 
 	bool isWidthSame	= ( srcWidth == dstWidth );
 	bool isHeightSame	= ( srcHeight == dstHeight );
-	bool isRowBytesSame = ( srcRowBytes == dstRowStride );
+	bool isRowBytesSame = ( srcRowBytes == dstRowBytes );
 	if ( !( isWidthSame && isHeightSame && isRowBytesSame ) ) {
 		throw VulkanExc( "dimension or row stride does not match for surface and image" );
 	}
@@ -1065,11 +1124,24 @@ void *Device::beginCopyToImage( uint32_t srcWidth, uint32_t srcHeight, uint32_t 
 	return pMappedAddress;
 }
 
-void Device::endCopyToImage( uint32_t srcWidth, uint32_t srcHeight, uint32_t srcRowBytes, vk::Image *pDstImage )
+void Device::endCopyToImage(
+	uint32_t   srcWidth,
+	uint32_t   srcHeight,
+	uint32_t   srcRowBytes,
+	uint32_t   dstMipLevel,
+	uint32_t   dstArrayLevel,
+	vk::Image *pDstImage )
 {
 	vk::BufferRef stagingBuffer = mOversizedStagingBuffer ? mOversizedStagingBuffer : mStagingBuffer;
 
-	internalCopyToImage( srcWidth, srcHeight, srcRowBytes, stagingBuffer.get(), pDstImage );
+	internalCopyToImage(
+		srcWidth,
+		srcHeight,
+		srcRowBytes,
+		stagingBuffer.get(),
+		dstMipLevel,
+		dstArrayLevel,
+		pDstImage );
 
 	stagingBuffer->unmap();
 

@@ -49,10 +49,26 @@ DescriptorSetLayout::~DescriptorSetLayout()
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // DescriptorSet
 
-DescriptorSet::DescriptorSet( vk::DeviceRef device, VkDescriptorSet handle )
-	: vk::DeviceChildObject( device ),
-	  mDescriptorSetHandle( handle )
+vk::DescriptorSetRef DescriptorSet::create( vk::DescriptorPoolRef pool, const vk::DescriptorSetLayoutRef &layout )
 {
+	return vk::DescriptorSetRef( new DescriptorSet( pool, layout ) );
+}
+
+DescriptorSet::DescriptorSet( vk::DescriptorPoolRef pool, const vk::DescriptorSetLayoutRef &layout )
+	: vk::DeviceChildObject( pool->getDevice() )
+{
+	VkDescriptorSetLayout layoutHandle = layout->getDescriptorSetLayoutHandle();
+
+	VkDescriptorSetAllocateInfo vkai = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+	vkai.pNext						 = nullptr;
+	vkai.descriptorPool				 = pool->getDescriptorPoolHandle();
+	vkai.descriptorSetCount			 = 1;
+	vkai.pSetLayouts				 = &layoutHandle;
+
+	VkResult vkres = CI_VK_DEVICE_FN( AllocateDescriptorSets( getDeviceHandle(), &vkai, &mDescriptorSetHandle ) );
+	if ( vkres != VK_SUCCESS ) {
+		throw VulkanFnFailedExc( "vkAllocateDescriptorSets", vkres );
+	}
 }
 
 DescriptorSet::~DescriptorSet()
@@ -82,7 +98,7 @@ DescriptorPool::DescriptorPool( vk::DeviceRef device, const Options &options )
 		}
 	}
 
-	VkDescriptorPoolCreateInfo vkci = { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+	VkDescriptorPoolCreateInfo vkci = { VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
 	vkci.pNext						= nullptr;
 	vkci.flags						= options.mFlags;
 	vkci.maxSets					= maxSets;

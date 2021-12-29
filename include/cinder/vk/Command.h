@@ -67,13 +67,34 @@ public:
 	void begin( VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT );
 	void end();
 
+	void bindDescriptorSets(
+		VkPipelineBindPoint						 pipelineBindPoint,
+		const vk::PipelineLayoutRef &			 pipelineLayout,
+		uint32_t								 firstSet,
+		const std::vector<vk::DescriptorSetRef> &sets,
+		uint32_t								 dynamicOffsetCount = 0,
+		const uint32_t *						 pDynamicOffsets	= nullptr );
+
+	void bindPipeline(
+		VkPipelineBindPoint	   pipelineBindPoint,
+		const vk::PipelineRef &pipeline );
+
 	void beginRendering( const RenderingInfo &ri );
 	void endRendering();
+
+	void setScissor( int32_t x, int32_t y, uint32_t width, uint32_t height );
+	void setViewport( float x, float y, float width, float height, float minDepth = 0.0f, float maxDepth = 1.0f );
 
 	void clearColorAttachment( uint32_t index, const VkClearColorValue &clearValue, const VkRect2D &rect );
 	void clearDepthStencilAttachment( float depthClearValue, uint32_t stencilClearValue, const VkRect2D &rect, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT );
 	void clearDepthAttachment( float clearValue, const VkRect2D &rect );
 	void clearStencilAttachment( uint32_t clearValue, const VkRect2D &rect );
+
+	void bindIndexBuffer( vk::BufferRef &buffer, uint32_t offset, VkIndexType indexType );
+	void bindVertexBuffers( uint32_t firstBinding, const std::vector<vk::BufferRef> &buffers, std::vector<uint64_t> offsets = {} );
+
+	void draw( uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance );
+	void drawIndexed( uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance );
 
 	void transitionImageLayout(
 		VkImage				 image,

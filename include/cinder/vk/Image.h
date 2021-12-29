@@ -210,7 +210,7 @@ public:
 		// clang-format off
 		Options& viewType( VkImageViewType value ) { mViewType = value; return *this; }
 		Options& format( VkFormat value ) { mFormat = value; return *this; }
-		Options& componets( const VkComponentMapping& value ) { mComponents = value; return *this; }
+		Options& components( const VkComponentMapping& value ) { mComponents = value; return *this; }
 		Options& aspectMask( VkImageAspectFlags value ) { mAspectMask = value; return *this; }
 		Options& mipLevels( uint32_t baseLevel, uint32_t levelCount = VK_REMAINING_MIP_LEVELS ) { mBaseMipLevel = baseLevel; mLevelCount = levelCount; return *this; }
 		Options& arrayLayers( uint32_t baseLayer, uint32_t layerCount = VK_REMAINING_MIP_LEVELS ) { mBaseArrayLayer = baseLayer; mLayerCount = layerCount; return *this; }

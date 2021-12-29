@@ -1,4 +1,5 @@
 #include "cinder/vk/Mesh.h"
+#include "cinder/vk/Util.h"
 #include "cinder/app/RendererVk.h"
 #include "cinder/Log.h"
 
@@ -116,7 +117,7 @@ void BufferedMeshGeomTarget::copyIndices( geom::Primitive /*primitive*/, const u
 		std::unique_ptr<uint16_t[]> indices( new uint16_t[numIndices] );
 		copyIndexData( source, numIndices, indices.get() );
 		if ( !mMesh->mIndices ) {
-			vk::Buffer::Usage usage = vk::Buffer::Usage().indexBuffer().transferDst();
+			vk::Buffer::Usage usage = vk::Buffer::Usage().indexBuffer().transferSrc().transferDst();
 			mMesh->mIndices			= vk::Buffer::create( srcDataSize, indices.get(), usage, vk::MemoryUsage::GPU_ONLY, mMesh->getDevice() );
 		}
 		else {
@@ -129,7 +130,7 @@ void BufferedMeshGeomTarget::copyIndices( geom::Primitive /*primitive*/, const u
 		std::unique_ptr<uint32_t[]> indices( new uint32_t[numIndices] );
 		copyIndexData( source, numIndices, indices.get() );
 		if ( !mMesh->mIndices ) {
-			vk::Buffer::Usage usage = vk::Buffer::Usage().indexBuffer().transferDst();
+			vk::Buffer::Usage usage = vk::Buffer::Usage().indexBuffer().transferSrc().transferDst();
 			mMesh->mIndices			= vk::Buffer::create( srcDataSize, indices.get(), usage, vk::MemoryUsage::GPU_ONLY, mMesh->getDevice() );
 		}
 		else {
@@ -176,6 +177,7 @@ BufferedMesh::Layout &BufferedMesh::Layout::attrib( const geom::AttribInfo &attr
 	return *this;
 }
 
+/*
 uint32_t BufferedMesh::Layout::getStride() const
 {
 	uint32_t stride = 0;
@@ -183,6 +185,48 @@ uint32_t BufferedMesh::Layout::getStride() const
 		stride += static_cast<uint32_t>( elem.getStride() );
 	}
 	return stride;
+}
+*/
+
+void BufferedMesh::Layout::allocate( vk::DeviceRef device, size_t numVertices, geom::BufferLayout *resultBufferLayout, vk::BufferRef *resultVertexBuffer ) const
+{
+	auto attribInfos = mAttribInfos;
+
+	// setup offsets and strides based on interleaved or planar
+	size_t totalDataBytes;
+	if ( mInterleave ) {
+		size_t totalStride = 0;
+		for ( const auto &attrib : attribInfos )
+			totalStride += attrib.getByteSize();
+		size_t currentOffset = 0;
+		for ( auto &attrib : attribInfos ) {
+			attrib.setOffset( currentOffset );
+			attrib.setStride( totalStride );
+			currentOffset += attrib.getByteSize();
+		}
+		totalDataBytes = currentOffset * numVertices;
+	}
+	else { // planar data
+		size_t currentOffset = 0;
+		for ( auto &attrib : attribInfos ) {
+			attrib.setOffset( currentOffset );
+			attrib.setStride( attrib.getByteSize() );
+			currentOffset += attrib.getByteSize() * numVertices;
+		}
+		totalDataBytes = currentOffset;
+	}
+
+	*resultBufferLayout = geom::BufferLayout( attribInfos );
+
+	if ( resultVertexBuffer ) {
+		if ( *resultVertexBuffer ) { // non-null shared_ptr means the VBO should be resized
+			( *resultVertexBuffer )->ensureMinimumSize( totalDataBytes );
+		}
+		else { // else allocate
+			vk::Buffer::Usage usage = vk::Buffer::Usage().vertexBuffer().transferSrc().transferDst();
+			*resultVertexBuffer		= vk::Buffer::create( totalDataBytes, usage, vk::MemoryUsage::GPU_ONLY, device );
+		}
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -196,15 +240,21 @@ uint32_t BufferedMesh::Layout::getStride() const
 //
 //	return BufferedMeshRef();
 //}
-//
-//BufferedMeshRef BufferedMesh::create( const geom::Source &source, const geom::AttribSet &requestedAttribs, vk::DeviceRef device )
-//{
-//	if ( !device ) {
-//		device = app::RendererVk::getCurrentRenderer()->getDevice();
-//	}
-//
-//	return BufferedMeshRef();
-//}
+
+BufferedMeshRef BufferedMesh::create( const geom::Source &source, const geom::AttribSet &requestedAttribs, vk::DeviceRef device )
+{
+	if ( !device ) {
+		device = app::RendererVk::getCurrentRenderer()->getDevice();
+	}
+
+	// make an interleaved VboMesh::Layout with 'requestedAttribs'
+	vk::BufferedMesh::Layout layout;
+	for ( const auto &attrib : requestedAttribs ) {
+		layout.attrib( attrib, 0 ); // 0 dim implies querying the Source for its dimension
+	}
+
+	return BufferedMeshRef( new BufferedMesh( device, source, { { layout, nullptr } }, nullptr ) );
+}
 
 BufferedMeshRef BufferedMesh::create( const geom::Source &source, const std::vector<BufferedMesh::Layout> &vertexBufferLayouts, vk::DeviceRef device )
 {
@@ -212,23 +262,107 @@ BufferedMeshRef BufferedMesh::create( const geom::Source &source, const std::vec
 		device = app::RendererVk::getCurrentRenderer()->getDevice();
 	}
 
-	return BufferedMeshRef( new BufferedMesh( device, source, vertexBufferLayouts ) );
+	std::vector<std::pair<vk::BufferedMesh::Layout, vk::BufferRef>> layoutVbos;
+	for ( const auto &vertexArrayLayout : vertexBufferLayouts ) {
+		layoutVbos.push_back( std::make_pair( vertexArrayLayout, ( vk::BufferRef ) nullptr ) );
+	}
+
+	return BufferedMeshRef( new BufferedMesh( device, source, layoutVbos, nullptr ) );
 }
 
-BufferedMesh::BufferedMesh( vk::DeviceRef device, const geom::Source &source, const std::vector<BufferedMesh::Layout> &vertexBufferLayouts )
+BufferedMesh::BufferedMesh( vk::DeviceRef device, const geom::Source &source, std::vector<std::pair<vk::BufferedMesh::Layout, vk::BufferRef>> vertexBuffers, const vk::BufferRef &indexBuffer )
 	: vk::DeviceChildObject( device )
 {
+	// An empty vertexArrayBuffers implies we should just pull whatever attribs the Source is pushing. We arrived here from VboMesh::create( Source& )
+	if ( vertexBuffers.empty() ) {
+		// Create an interleaved Layout based on what's in the Source
+		vertexBuffers.push_back( std::pair<Layout, vk::BufferRef>( Layout().interleave(), nullptr ) );
+		for ( auto &attrib : source.getAvailableAttribs() ) {
+			auto dims = source.getAttribDims( attrib );
+			if ( dims > 0 ) {
+				vertexBuffers.back().first.attrib( attrib, dims );
+			}
+		}
+	}
+	else {
+		// For any attributes whose dims == 0, set the dims to be whatever dims the Source is pushing.
+		for ( auto &layoutVbo : vertexBuffers ) {
+			for ( auto &attribInfo : layoutVbo.first.getAttribs() ) {
+				if ( attribInfo.getDims() == 0 ) {
+					attribInfo.setDims( source.getAttribDims( attribInfo.getAttrib() ) );
+				}
+			}
+		}
+	}
+
 	// determine the requestedAttribs by iterating all the Layouts
 	geom::AttribSet requestedAttribs;
-	for ( const auto &vertexBufferLayout : vertexBufferLayouts ) {
+	for ( const auto &vertexArrayBuffer : vertexBuffers ) {
+		for ( const auto &attribInfo : vertexArrayBuffer.first.getAttribs() ) {
+			requestedAttribs.insert( attribInfo.getAttrib() );
+		}
+	}
+
+	// Vertex count and primitive type
+	mNumVertices = (uint32_t)source.getNumVertices();
+	mPrimitive	 = toVkPrimitive( source.getPrimitive() );
+
+	// iterate 'vertexArrayBuffers' and allocate mVertexArrayVbos, which is the parallel vector of <geom::BufferLayout,VboRef> pairs
+	for ( const auto &vertexBuffer : vertexBuffers ) {
+		geom::BufferLayout bufferLayout;
+		vk::BufferRef	   buffer = vertexBuffer.second;
+		// we pass nullptr for the VBO if we already have one, to prevent re-allocation by allocate()
+		vertexBuffer.first.allocate( device, mNumVertices, &bufferLayout, &buffer );
+		mVertexBuffers.push_back( make_pair( bufferLayout, buffer ) );
+	}
+
+	// Set our indices VBO to indexArrayVBO, which may well be empty, so that the target doesn't blow it away. Must do this before we loadInto().
+	mIndices = indexBuffer;
+
+	BufferedMeshGeomTarget target( source.getPrimitive(), this );
+	source.loadInto( &target, requestedAttribs );
+	// we need to let the target know it can copy from its internal buffers to our vertexData VBOs
+	target.copyBuffers();
+
+	/*
+	// determine the requestedAttribs by iterating all the Layouts
+	geom::AttribSet requestedAttribs;
+	for ( size_t i = 0; i < vertexBufferLayouts.size(); ++i ) {
+		auto &vertexBufferLayout = vertexBufferLayouts[i];
 		for ( const auto &attribInfo : vertexBufferLayout.getAttribs() ) {
 			requestedAttribs.insert( attribInfo.getAttrib() );
 		}
 	}
 
+	// An empty vertexArrayBuffers implies we should just pull whatever attribs the Source is pushing. We arrived here from VboMesh::create( Source& )
+	if( vertexArrayBuffers.empty() ) {
+		// Create an interleaved Layout based on what's in the Source
+		vertexArrayBuffers.push_back( std::pair<Layout,VboRef>( VboMesh::Layout().usage( GL_STATIC_DRAW ).interleave(), nullptr ) );
+		for( auto &attrib : source.getAvailableAttribs() ) {
+			auto dims = source.getAttribDims( attrib );
+			if( dims > 0 )
+				vertexArrayBuffers.back().first.attrib( attrib, dims );
+		}
+	}
+	else {
+		// For any attributes whose dims == 0, set the dims to be whatever dims the Source is pushing.
+		for( auto &layoutVbo : vertexArrayBuffers ) {
+			for( auto &attribInfo : layoutVbo.first.getAttribs() ) {
+				if( attribInfo.getDims() == 0 )
+					attribInfo.setDims( source.getAttribDims( attribInfo.getAttrib() ) );
+			}
+		}
+	}
+
+	// Vertex count and primitive type
+	mNumVertices = (uint32_t)source.getNumVertices();
+	mPrimitive	 = toVkPrimitive( source.getPrimitive() );
+
 	for ( const auto &vertexBufferLayout : vertexBufferLayouts ) {
-		uint64_t		  size	= vertexBufferLayout.getStride() * source.getNumVertices();
-		vk::Buffer::Usage usage = vk::Buffer::Usage().vertexBuffer().transferDst();
+		const uint32_t	  stride	  = vertexBufferLayout.getStride();
+		const uint32_t	  numVertices = static_cast<uint32_t>( source.getNumVertices() );
+		uint64_t		  size		  = stride * numVertices;
+		vk::Buffer::Usage usage		  = vk::Buffer::Usage().vertexBuffer().transferDst();
 
 		geom::BufferLayout bufferLayout = geom::BufferLayout( vertexBufferLayout.getAttribs() );
 
@@ -240,6 +374,7 @@ BufferedMesh::BufferedMesh( vk::DeviceRef device, const geom::Source &source, co
 	source.loadInto( &target, requestedAttribs );
 	// we need to let the target know it can copy from its internal buffers to our vertexData VBOs
 	target.copyBuffers();
+*/
 }
 
 uint8_t BufferedMesh::getAttribDims( geom::Attrib attr ) const

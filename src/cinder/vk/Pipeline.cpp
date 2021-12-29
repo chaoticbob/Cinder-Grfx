@@ -59,6 +59,14 @@ PipelineLayout::~PipelineLayout()
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Pipeline::Options
+
+Pipeline::Options::Options( const GraphicsPipelineState &gs )
+{
+	memcpy( &mGraphicsState, &gs, sizeof( gs ) );
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Pipeline
 
 /*
@@ -409,6 +417,7 @@ void Pipeline::initDynamicState(
 	dynamicStates.push_back( VK_DYNAMIC_STATE_STENCIL_WRITE_MASK );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_STENCIL_REFERENCE );
 
+/*
 	// Provided by VK_EXT_extended_dynamic_state
 	dynamicStates.push_back( VK_DYNAMIC_STATE_CULL_MODE_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_DEPTH_BOUNDS_TEST_ENABLE_EXT );
@@ -417,11 +426,11 @@ void Pipeline::initDynamicState(
 	dynamicStates.push_back( VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_FRONT_FACE_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_PRIMITIVE_TOPOLOGY_EXT );
-	dynamicStates.push_back( VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT_EXT );
+	//dynamicStates.push_back( VK_DYNAMIC_STATE_SCISSOR_WITH_COUNT_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_STENCIL_OP_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_VERTEX_INPUT_BINDING_STRIDE_EXT );
-	dynamicStates.push_back( VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT_EXT );
+	//dynamicStates.push_back( VK_DYNAMIC_STATE_VIEWPORT_WITH_COUNT_EXT );
 
 	// Provided by VK_EXT_extended_dynamic_state2
 	dynamicStates.push_back( VK_DYNAMIC_STATE_DEPTH_BIAS_ENABLE_EXT );
@@ -429,6 +438,7 @@ void Pipeline::initDynamicState(
 	dynamicStates.push_back( VK_DYNAMIC_STATE_PATCH_CONTROL_POINTS_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_PRIMITIVE_RESTART_ENABLE_EXT );
 	dynamicStates.push_back( VK_DYNAMIC_STATE_RASTERIZER_DISCARD_ENABLE_EXT );
+*/
 
 	dynamcStateCreateInfo.flags				= 0;
 	dynamcStateCreateInfo.dynamicStateCount = countU32( dynamicStates );
@@ -508,8 +518,15 @@ void Pipeline::initGraphicsPipeline( ShaderProgRef shaderProg, PipelineLayoutRef
 	//	}
 	//}
 
+	VkPipelineRenderingCreateInfoKHR renderingCreateInfo = { VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
+	renderingCreateInfo.colorAttachmentCount			 = options.mGraphicsState.om.renderTargetCount;
+	renderingCreateInfo.pColorAttachmentFormats			 = options.mGraphicsState.om.renderTargets;
+	renderingCreateInfo.depthAttachmentFormat			 = options.mGraphicsState.om.depthStencil;
+	renderingCreateInfo.stencilAttachmentFormat			 = options.mGraphicsState.om.depthStencil;
+
 	// Fill in pointers nad remaining values
 	//
+	vkci.pNext				 = &renderingCreateInfo;
 	vkci.flags				 = 0;
 	vkci.stageCount			 = countU32( shaderStages );
 	vkci.pStages			 = dataPtr( shaderStages );
@@ -527,6 +544,17 @@ void Pipeline::initGraphicsPipeline( ShaderProgRef shaderProg, PipelineLayoutRef
 	vkci.subpass			 = 0; // One subpass to rule them all
 	vkci.basePipelineHandle	 = VK_NULL_HANDLE;
 	vkci.basePipelineIndex	 = -1;
+
+	VkResult vkres = CI_VK_DEVICE_FN( CreateGraphicsPipelines(
+		getDeviceHandle(),
+		VK_NULL_HANDLE,
+		1,
+		&vkci,
+		nullptr,
+		&mPipelineHandle ) );
+	if ( vkres != VK_SUCCESS ) {
+		throw VulkanFnFailedExc( "vkCreateGraphicsPipelines", vkres );
+	}
 
 	//VkResult vkres = vkCreateGraphicsPipelines(
 	//VkResult vkres = CI_VK_DEVICE_FN( CreateGraphicsPipelines(

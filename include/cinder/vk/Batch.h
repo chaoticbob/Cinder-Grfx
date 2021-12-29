@@ -20,6 +20,8 @@ public:
 	//! Draws the Batch. Optionally specify a \a first vertex/element and a \a count. Otherwise the entire geometry will be drawn.
 	void			draw( int32_t first = 0, int32_t count = -1 );
 
+	vk::BufferedMeshRef getMesh() const { return mMesh; }
+
 private:
 	Batch( vk::DeviceRef device, const geom::Source &source, const vk::ShaderProgRef &shaderProg, const AttributeMapping &attributeMapping );
 

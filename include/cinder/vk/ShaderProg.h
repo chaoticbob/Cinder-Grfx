@@ -1,6 +1,8 @@
 #pragma once
 
 #include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/UniformBlock.h"
+#include "cinder/vk/Util.h"
 
 #include "cinder/DataSource.h"
 #include "cinder/GeomIo.h"
@@ -9,29 +11,6 @@
 
 namespace cinder::vk {
 
-struct VertexAttribute
-{
-	std::string	 name;
-	uint32_t	 location;
-	VkFormat	 format;
-	geom::Attrib semantic;
-};
-
-struct UniformVariable
-{
-	uint32_t binding;
-	uint32_t set;
-	uint32_t offset;
-};
-
-struct DescriptorBinding
-{
-	VkDescriptorType type;
-	uint32_t		 binding;
-	uint32_t		 set;
-	std::string		 name;
-};
-
 //! @class ShaderModule
 //!
 //!
@@ -39,6 +18,8 @@ class ShaderModule
 	: public vk::DeviceChildObject
 {
 public:
+	///////////////////////////////////////////////////////////////////////////////////////////////////
+
 	~ShaderModule();
 
 	static vk::ShaderModuleRef create( DataSourceRef dataSource, vk::DeviceRef device = vk::DeviceRef() );
@@ -51,18 +32,26 @@ public:
 
 	VkShaderModule getShaderModuleHandle() const { return mShaderModuleHandle; }
 
-	std::vector<VertexAttribute> getVertexAttributes() const;
+	std::vector<vk::VertexAttribute> getVertexAttributes() const;
 
-	std::vector<DescriptorBinding> getDescriptorBindings() const;
+	std::vector<vk::DescriptorBinding> getDescriptorBindings() const;
+
+	std::vector<const vk::UniformBlock *> getUniformBlocks() const;
 
 private:
 	ShaderModule( vk::DeviceRef device, size_t spirvSize, const char *pSpirvCode );
 
+	void parseDescriptorBindings();
+	void parseUniformBlocks();
+
 private:
-	std::vector<char>		  mSpirv;
-	spv_reflect::ShaderModule mReflection;
-	VkShaderStageFlagBits	  mShaderStage		  = static_cast<VkShaderStageFlagBits>( 0 );
-	VkShaderModule			  mShaderModuleHandle = VK_NULL_HANDLE;
+	std::vector<char>							   mSpirv;
+	spv_reflect::ShaderModule					   mReflection;
+	std::vector<SpvReflectDescriptorBinding *>	   mSpirvBindings;
+	std::vector<std::unique_ptr<vk::UniformBlock>> mUniformBlocks;
+	vk::UniformBlock *							   mDefaultUniformBlock = nullptr;
+	VkShaderStageFlagBits						   mShaderStage			= static_cast<VkShaderStageFlagBits>( 0 );
+	VkShaderModule								   mShaderModuleHandle	= VK_NULL_HANDLE;
 };
 
 //! @class ShaderProg
@@ -71,6 +60,8 @@ private:
 class CI_API ShaderProg
 {
 public:
+	///////////////////////////////////////////////////////////////////////////////////////////////////
+
 	struct CI_API Format
 	{
 		Format() {}
@@ -174,10 +165,13 @@ public:
 
 	const std::map<uint32_t, std::vector<DescriptorBinding>> &getDescriptorsetBindings() const { return mDescriptorSetBindings; }
 
+	const UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
+
 protected:
 	ShaderProg( vk::DeviceRef device, const Format &format );
 
-	void addDescriptorBindings( vk::ShaderModuleRef shader );
+	void parseDscriptorBindings( const vk::ShaderModule *shader );
+	void parseUniformBlocks( const vk::ShaderModule *shader );
 
 private:
 	vk::ShaderModuleRef mVS; // Vertex
@@ -189,6 +183,8 @@ private:
 
 	std::vector<VertexAttribute>					   mVertexAttributes;
 	std::map<uint32_t, std::vector<DescriptorBinding>> mDescriptorSetBindings;
+	std::vector<std::unique_ptr<UniformBlock>>		   mUniformBlocks;
+	UniformBlock *									   mDefaultUniformBlock = nullptr;
 };
 
 //! @class GlslProg
