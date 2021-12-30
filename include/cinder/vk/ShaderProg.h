@@ -307,7 +307,7 @@ private:
 		const std::string &		  sourceText,
 		VkShaderStageFlagBits	  shaderStage,
 		const std::string &		  entryPointName = "",
-		vk::HlslProg::ShaderModel shaderModel	 = vk::HlslProg::ShaderModel::SM_6_0 );
+		vk::HlslProg::ShaderModel shaderModel	 = vk::HlslProg::ShaderModel::SM_6_6 );
 
 private:
 	vk::ShaderProgRef mShaderProg;
