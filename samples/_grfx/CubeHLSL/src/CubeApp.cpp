@@ -22,7 +22,7 @@ public:
 	CameraPersp		mCam;
 	gl::BatchRef	mBatch;
 	gl::TextureRef	mTexture;
-	gl::GlslProgRef mGlsl;
+	gl::HlslProgRef mHlsl;
 	mat4			mCubeRotation;
 };
 
@@ -42,7 +42,7 @@ void RotatingCubeApp::setup()
 	}
 
 	try {
-		mGlsl = gl::GlslProg::create( loadAsset( "shader.vert" ), loadAsset( "shader.frag" ) );
+		mHlsl = gl::HlslProg::create( loadAsset( "shader.hlsl" ), loadAsset( "shader.hlsl" ) );
 		CI_LOG_I( "Loaded shader" );
 	}
 	catch ( const std::exception &e ) {
@@ -50,13 +50,13 @@ void RotatingCubeApp::setup()
 	}
 
 	try {
-		mBatch = gl::Batch::create( geom::Cube(), mGlsl );
+		mBatch = gl::Batch::create( geom::Cube(), mHlsl );
 		CI_LOG_I( "Created batch" );
 	}
 	catch ( const std::exception &e ) {
 		CI_LOG_E( "Shader Error: " << e.what() );
 	}
-	 
+
 	gl::enableDepthWrite();
 	gl::enableDepthRead();
 }

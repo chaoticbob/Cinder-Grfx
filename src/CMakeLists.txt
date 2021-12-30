@@ -246,5 +246,6 @@ elseif ( CINDER_MSW )
     # Link libraries
     target_link_libraries(${TARGET_NAME} 
         PUBLIC "${VULKAN_LIBRARY_DIR}/vulkan-1.lib"
+               "${VULKAN_LIBRARY_DIR}/dxcompiler.lib"
     )
 endif()

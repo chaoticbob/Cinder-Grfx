@@ -570,6 +570,65 @@ Texture2d::Texture2d( vk::DeviceRef device, const Channel32f &channel, Format fo
 	//	mImage.get() );
 }
 
+template <typename T>
+static void copyMipsToImage(
+	vk::Device *	   pDevice,
+	const ChannelT<T> &mip0,
+	vk::Image *		   pDstImage )
+{
+	// Dims for mip 0
+	uint32_t width	   = static_cast<uint32_t>( mip0.getWidth() );
+	uint32_t height	   = static_cast<uint32_t>( mip0.getHeight() );
+	uint32_t rowBytes  = static_cast<uint32_t>( mip0.getRowBytes() );
+	uint32_t increment = mip0.getIncrement();
+	// Copy to mip 0
+	pDevice->copyToImage( width, height, rowBytes, mip0.getData(), 0, 0, pDstImage );
+	// Scale and copy to remaining mips
+	const uint32_t numMipLevels = pDstImage->getMipLevels();
+	for ( uint32_t mipLevel = 1; mipLevel < numMipLevels; ++mipLevel ) {
+		// Calculate dims for current mip
+		width >>= 1;
+		height >>= 1;
+		rowBytes >>= 1;
+		// Get staging buffer pointer
+		void *pStorage = pDevice->beginCopyToImage( width, height, rowBytes, mipLevel, 0, pDstImage );
+		// Scale to current mip from mip 0
+		ChannelT<T> mipN = ChannelT<T>( width, height, rowBytes, increment, reinterpret_cast<uint8_t *>( pStorage ) );
+		ip::resize( mip0, &mipN, ci::FilterCatmullRom() );
+		// Finalize copy
+		pDevice->endCopyToImage( width, height, rowBytes, mipLevel, 0, pDstImage );
+	}
+}
+
+template <typename T>
+static void copyMipsToImage(
+	vk::Device *	   pDevice,
+	const SurfaceT<T> &mip0,
+	vk::Image *		   pDstImage )
+{
+	// Dims for mip 0
+	uint32_t width	  = static_cast<uint32_t>( mip0.getWidth() );
+	uint32_t height	  = static_cast<uint32_t>( mip0.getHeight() );
+	uint32_t rowBytes = static_cast<uint32_t>( mip0.getRowBytes() );
+	// Copy to mip 0
+	pDevice->copyToImage( width, height, rowBytes, mip0.getData(), 0, 0, pDstImage );
+	// Scale and copy to remaining mips
+	const uint32_t numMipLevels = pDstImage->getMipLevels();
+	for ( uint32_t mipLevel = 1; mipLevel < numMipLevels; ++mipLevel ) {
+		// Calculate dims for current mip
+		width >>= 1;
+		height >>= 1;
+		rowBytes >>= 1;
+		// Get staging buffer pointer
+		void *pStorage = pDevice->beginCopyToImage( width, height, rowBytes, mipLevel, 0, pDstImage );
+		// Scale to current mip from mip 0
+		Surface8u mipN = Surface8u( reinterpret_cast<uint8_t *>( pStorage ), width, height, rowBytes, mip0.getChannelOrder() );
+		ip::resize( mip0, &mipN, ci::FilterCatmullRom() );
+		// Finalize copy
+		pDevice->endCopyToImage( width, height, rowBytes, mipLevel, 0, pDstImage );
+	}
+}
+
 Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, Format format )
 	: TextureBase( device, imageSource->getWidth(), imageSource->getHeight() ),
 	  mActualSize( imageSource->getWidth(), imageSource->getHeight() ),
@@ -671,10 +730,6 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 	initSampler( format );
 	initViews();
 
-	uint32_t srcWidth	 = static_cast<uint32_t>( imageSource->getWidth() );
-	uint32_t srcHeight	 = static_cast<uint32_t>( imageSource->getHeight() );
-	uint32_t srcRowBytes = static_cast<uint32_t>( imageSource->getRowBytes() );
-
 	switch ( conversionTarget ) {
 		default: {
 			switch ( dataType ) {
@@ -684,38 +739,13 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 
 				case ImageIo::DataType::UINT8: {
 					if ( isGray ) {
-						auto	 mip0	  = Channel8u( imageSource );
-						uint32_t width	  = static_cast<uint32_t>( mip0.getWidth() );
-						uint32_t height	  = static_cast<uint32_t>( mip0.getHeight() );
-						uint32_t rowBytes = static_cast<uint32_t>( mip0.getRowBytes() );
-						getDevice()->copyToImage( width, height, rowBytes, mip0.getData(), 0, 0, mImage.get() );
-
-						const uint32_t numMipLevels = mImage->getMipLevels();
-						for ( uint32_t mipLevel = 1; mipLevel < numMipLevels; ++mipLevel ) {
-							width >>= 1;
-							height >>= 1;
-							rowBytes >>= 1;
-
-							void *pStorage = getDevice()->beginCopyToImage( width, height, rowBytes, mipLevel, 0, mImage.get() );
-
-							Channel8u mipN = Channel8u( width, height, rowBytes, 1, reinterpret_cast<uint8_t *>( pStorage ) );
-
-							ip::resize( mip0, &mipN, ci::FilterCatmullRom() );
-
-							getDevice()->endCopyToImage( width, height, rowBytes, mipLevel, 0, mImage.get() );
-						}
+						auto mip0 = Channel8u( imageSource );
+						copyMipsToImage<uint8_t>( getDevice().get(), mip0, mImage.get() );
 					}
 					else {
+						auto mip0 = Surface8u( imageSource );
+						copyMipsToImage<uint8_t>( getDevice().get(), mip0, mImage.get() );
 					}
-
-					/*
-					void *pStorage = getDevice()->beginCopyToImage( srcWidth, srcHeight, srcRowBytes, mImage.get() );
-
-					auto imageTarget = ImageTargetTexture<uint8_t>::create( this, ImageIo::ChannelOrder::Y, isGray, false, pStorage );
-					imageSource->load( imageTarget );
-
-					getDevice()->endCopyToImage( srcWidth, srcHeight, srcRowBytes, mImage.get() );
-					*/
 				} break;
 			}
 		} break;

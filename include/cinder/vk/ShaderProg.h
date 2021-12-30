@@ -47,6 +47,7 @@ private:
 private:
 	std::vector<char>							   mSpirv;
 	spv_reflect::ShaderModule					   mReflection;
+	SpvSourceLanguage							   mSourceLanguage;
 	std::vector<SpvReflectDescriptorBinding *>	   mSpirvBindings;
 	std::vector<std::unique_ptr<vk::UniformBlock>> mUniformBlocks;
 	vk::UniformBlock *							   mDefaultUniformBlock = nullptr;
@@ -228,10 +229,10 @@ public:
 
 	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
 
-protected:
+private:
 	GlslProg( vk::DeviceRef device, const vk::ShaderProg::Format &format );
 
-	static void				   loadShader( DataSourceRef dataSource, std::string &sourceTarget );
+	//static void				   loadShader( DataSourceRef dataSource, std::string &sourceTarget );
 	static vk::ShaderModuleRef compileShader( vk::DeviceRef device, const std::string &source, VkShaderStageFlagBits stage );
 
 private:
@@ -242,11 +243,65 @@ private:
 //!
 //!
 class HlslProg
+	: public vk::ShaderProg
 {
 public:
+	enum class ShaderModel : uint32_t
+	{
+		SM_6_0 = 0,
+		SM_6_1,
+		SM_6_2,
+		SM_6_3,
+		SM_6_4,
+		SM_6_5,
+		SM_6_6,
+	};
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+
 	virtual ~HlslProg();
 
+	static HlslProgRef create(
+		DataSourceRef vs,
+		DataSourceRef ps = DataSourceRef(),
+		DataSourceRef gs = DataSourceRef(),
+		DataSourceRef ds = DataSourceRef(),
+		DataSourceRef hs = DataSourceRef() );
+
+	static HlslProgRef create(
+		vk::DeviceRef device,
+		DataSourceRef vs,
+		DataSourceRef ps = DataSourceRef(),
+		DataSourceRef gs = DataSourceRef(),
+		DataSourceRef ds = DataSourceRef(),
+		DataSourceRef hs = DataSourceRef() );
+
+	static HlslProgRef create(
+		const std::string &vsSource,
+		const std::string &psSource = std::string(),
+		const std::string &gsSource = std::string(),
+		const std::string &dsSource = std::string(),
+		const std::string &hsSource = std::string() );
+
+	static HlslProgRef create(
+		vk::DeviceRef	   device,
+		const std::string &vsSource,
+		const std::string &psSource = std::string(),
+		const std::string &gsSource = std::string(),
+		const std::string &dsSource = std::string(),
+		const std::string &hsSource = std::string() );
+
 	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
+
+private:
+	HlslProg( vk::DeviceRef device, const vk::ShaderProg::Format &format );
+
+	static vk::ShaderModuleRef compileShader(
+		vk::DeviceRef			  device,
+		const std::string &		  sourceText,
+		VkShaderStageFlagBits	  shaderStage,
+		const std::string &		  entryPointName = "",
+		vk::HlslProg::ShaderModel shaderModel	 = vk::HlslProg::ShaderModel::SM_6_0 );
 
 private:
 	vk::ShaderProgRef mShaderProg;

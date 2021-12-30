@@ -4,13 +4,22 @@
 #include "cinder/app/AppBase.h"
 #include "cinder/app/RendererVk.h"
 #include "cinder/Log.h"
+#include "cinder/Unicode.h"
 
 #include "glslang/Include/glslang_c_interface.h"
 #include "StandAlone/resource_limits_c.h"
 
+#include "dxc/dxcapi.h"
+
+#if defined( CINDER_MSW )
+#include <wrl/client.h>
+using Microsoft::WRL::ComPtr;
+#endif
+
 namespace cinder::vk {
 
 static const std::string CI_VK_DEFAULT_UNIFORM_BLOCK_NAME = "gl_DefaultUniformBlock";
+static const std::string CI_VK_HLSL_GLOBALS_NAME		  = "$Globals";
 
 static std::map<std::string, UniformSemantic> sDefaultUniformNameToSemanticMap = {
 	{ "ciModelMatrix", UNIFORM_MODEL_MATRIX },
@@ -33,6 +42,7 @@ static std::map<std::string, UniformSemantic> sDefaultUniformNameToSemanticMap =
 };
 
 static std::map<std::string, geom::Attrib> sDefaultAttribNameToSemanticMap = {
+	// GLSL
 	{ "ciPosition", geom::Attrib::POSITION },
 	{ "ciNormal", geom::Attrib::NORMAL },
 	{ "ciTangent", geom::Attrib::TANGENT },
@@ -44,7 +54,46 @@ static std::map<std::string, geom::Attrib> sDefaultAttribNameToSemanticMap = {
 	{ "ciColor", geom::Attrib::COLOR },
 	{ "ciBoneIndex", geom::Attrib::BONE_INDEX },
 	{ "ciBoneWeight", geom::Attrib::BONE_WEIGHT },
+	// HLSL
+	{ "in.var.POSTIION", geom::Attrib::POSITION },
+	{ "in.var.NORMAL", geom::Attrib::NORMAL },
+	{ "in.var.TANGENT", geom::Attrib::TANGENT },
+	{ "in.var.BITANGENT", geom::Attrib::BITANGENT },
+	{ "in.var.BINORMAL", geom::Attrib::BITANGENT },
+	{ "in.var.TEXCOORD", geom::Attrib::TEX_COORD_0 },
+	{ "in.var.TEXCOORD0", geom::Attrib::TEX_COORD_0 },
+	{ "in.var.TEXCOORD01", geom::Attrib::TEX_COORD_1 },
+	{ "in.var.TEXCOORD02", geom::Attrib::TEX_COORD_2 },
+	{ "in.var.TEXCOORD03", geom::Attrib::TEX_COORD_3 },
+	{ "in.var.COLOR", geom::Attrib::COLOR },
+	{ "in.var.BONEINDEX", geom::Attrib::BONE_INDEX },
+	{ "in.var.BONEWEIGHT", geom::Attrib::BONE_WEIGHT },
 };
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Helper functions
+
+static void loadShaderSource( DataSourceRef dataSource, std::string &sourceTarget )
+{
+	if ( !dataSource ) {
+		return;
+	}
+
+	ci::BufferRef buffer;
+	if ( dataSource->isFilePath() ) {
+		buffer = loadFile( dataSource->getFilePath() )->getBuffer();
+	}
+	else if ( dataSource->isUrl() ) {
+		buffer = loadUrl( dataSource->getUrl() )->getBuffer();
+	}
+	else {
+		buffer = dataSource->getBuffer();
+	}
+
+	const char *start = static_cast<const char *>( buffer->getData() );
+	const char *end	  = start + buffer->getSize();
+	sourceTarget	  = std::string( start, end );
+}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ShaderModule
@@ -240,7 +289,7 @@ static void parseSpirvUniformBlock( std::string prefix, const SpvReflectBlockVar
 		}
 		else {
 			std::stringstream name;
-			if ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+			if ( ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) && ( prefix != CI_VK_HLSL_GLOBALS_NAME ) ) {
 				name << prefix << ".";
 			}
 			name << member.name;
@@ -276,16 +325,26 @@ static void parseSpirvUniformBlock( std::string prefix, const SpvReflectBlockVar
 
 void ShaderModule::parseUniformBlocks()
 {
+	bool isGlsl = ( mReflection.GetShaderModule().source_language == SpvSourceLanguageGLSL );
+	bool isHlsl = ( mReflection.GetShaderModule().source_language == SpvSourceLanguageHLSL );
+
 	for ( size_t i = 0; i < mSpirvBindings.size(); ++i ) {
 		const SpvReflectDescriptorBinding *pSpvBinding = mSpirvBindings[i];
 		if ( pSpvBinding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER ) {
 			continue;
 		}
 
-		std::string name	 = pSpvBinding->block.name;
-		std::string typeName = spvReflectBlockVariableTypeName( &pSpvBinding->block );
-		if ( name.empty() && ( typeName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) ) {
-			name = typeName;
+		std::string name = pSpvBinding->block.name;
+		if ( name.empty() ) {
+			if ( isGlsl ) {
+				std::string typeName = spvReflectBlockVariableTypeName( &pSpvBinding->block );
+				if ( typeName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+					name = typeName;
+				}
+			}
+			else {
+				throw VulkanExc( "unexpected unnamed uniform block" );
+			}
 		}
 
 		std::vector<Uniform> uniforms;
@@ -293,7 +352,9 @@ void ShaderModule::parseUniformBlocks()
 
 		auto uniformBlock = std::make_unique<UniformBlock>( name, pSpvBinding->block.size, pSpvBinding->binding, pSpvBinding->set, uniforms );
 
-		if ( ( mReflection.GetShaderModule().source_language == SpvSourceLanguageGLSL ) && ( name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) ) {
+		bool isGlslDefaultUniformBlock = isGlsl && ( name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME );
+		bool isHlslGlobals			   = isHlsl && ( name == CI_VK_HLSL_GLOBALS_NAME );
+		if ( isGlslDefaultUniformBlock || isHlslGlobals ) {
 			mDefaultUniformBlock = uniformBlock.get();
 		}
 
@@ -551,7 +612,7 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 
 	auto blocks = shader->getUniformBlocks();
 	for ( const auto &block : blocks ) {
-		if ( block->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+		if ( ( block->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( block->getName() == CI_VK_HLSL_GLOBALS_NAME ) ) {
 			// Add default uniform blcok if we don't have one...
 			if ( mDefaultUniformBlock == nullptr ) {
 				auto defaultUniformBlock = std::make_unique<UniformBlock>( *block );
@@ -641,11 +702,11 @@ GlslProgRef GlslProg::create(
 	std::string tessEvalSource;
 	std::string tessCtrlSource;
 
-	loadShader( vertexShader, vertexSource );
-	loadShader( fragmentShader, fragmentSource );
-	loadShader( geometryShader, geometrySource );
-	loadShader( tessEvalShader, tessEvalSource );
-	loadShader( tessCtrlShader, tessCtrlSource );
+	loadShaderSource( vertexShader, vertexSource );
+	loadShaderSource( fragmentShader, fragmentSource );
+	loadShaderSource( geometryShader, geometrySource );
+	loadShaderSource( tessEvalShader, tessEvalSource );
+	loadShaderSource( tessCtrlShader, tessCtrlSource );
 
 	return create( device, vertexSource, fragmentSource, geometrySource, tessEvalSource, tessCtrlSource );
 }
@@ -694,6 +755,7 @@ GlslProg::~GlslProg()
 {
 }
 
+/*
 void GlslProg::loadShader( DataSourceRef dataSource, std::string &sourceTarget )
 {
 	if ( !dataSource ) {
@@ -715,6 +777,7 @@ void GlslProg::loadShader( DataSourceRef dataSource, std::string &sourceTarget )
 	const char *end	  = start + buffer->getSize();
 	sourceTarget	  = std::string( start, end );
 }
+*/
 
 class Glslang
 {
@@ -900,6 +963,268 @@ vk::ShaderModuleRef GlslProg::compileShader( vk::DeviceRef device, const std::st
 	vk::ShaderModuleRef shaderModule = vk::ShaderModule::create( sizeInBytes, pSpirvCode, device );
 
 	glslang_program_delete( program );
+
+	return shaderModule;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HlslProg
+
+HlslProgRef HlslProg::create(
+	DataSourceRef vs,
+	DataSourceRef ps,
+	DataSourceRef gs,
+	DataSourceRef ds,
+	DataSourceRef hs )
+{
+	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
+	return create( device, vs, ps, gs, ds, hs );
+}
+
+HlslProgRef HlslProg::create(
+	vk::DeviceRef device,
+	DataSourceRef vs,
+	DataSourceRef ps,
+	DataSourceRef gs,
+	DataSourceRef ds,
+	DataSourceRef hs )
+{
+	std::string vsSource;
+	std::string psSource;
+	std::string gsSource;
+	std::string dsSource;
+	std::string hsSource;
+
+	loadShaderSource( vs, vsSource );
+	loadShaderSource( ps, psSource );
+	loadShaderSource( gs, gsSource );
+	loadShaderSource( ds, dsSource );
+	loadShaderSource( hs, hsSource );
+
+	return create( device, vsSource, psSource, gsSource, dsSource, hsSource );
+}
+
+HlslProgRef HlslProg::create(
+	const std::string &vsSource,
+	const std::string &psSource,
+	const std::string &gsSource,
+	const std::string &dsSource,
+	const std::string &hsSource )
+{
+	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
+	return create( device, vsSource, psSource, gsSource, dsSource, hsSource );
+}
+
+HlslProgRef HlslProg::create(
+	vk::DeviceRef	   device,
+	const std::string &vsSource,
+	const std::string &psSource,
+	const std::string &gsSource,
+	const std::string &dsSource,
+	const std::string &hsSource )
+{
+	vk::ShaderModuleRef vs = compileShader( device, vsSource, VK_SHADER_STAGE_VERTEX_BIT );
+	vk::ShaderModuleRef ps = compileShader( device, psSource, VK_SHADER_STAGE_FRAGMENT_BIT );
+	vk::ShaderModuleRef gs = compileShader( device, gsSource, VK_SHADER_STAGE_GEOMETRY_BIT );
+	vk::ShaderModuleRef ds = compileShader( device, dsSource, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
+	vk::ShaderModuleRef hs = compileShader( device, hsSource, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
+
+	vk::ShaderProg::Format format = ShaderProg::Format();
+	format.vertex( vs );
+	format.fragment( ps );
+	format.geometry( gs );
+	format.tessellationEval( ds );
+	format.tessellationCtrl( hs );
+
+	return HlslProgRef( new HlslProg( device, format ) );
+}
+
+HlslProg::HlslProg( vk::DeviceRef device, const ShaderProg::Format &format )
+	: vk::ShaderProg( device, format )
+{
+}
+
+HlslProg::~HlslProg()
+{
+}
+
+vk::ShaderModuleRef HlslProg::compileShader(
+	vk::DeviceRef			  device,
+	const std::string &		  sourceText,
+	VkShaderStageFlagBits	  shaderStage,
+	const std::string &		  entryPointName,
+	vk::HlslProg::ShaderModel shaderModel )
+{
+	if ( sourceText.empty() ) {
+		return vk::ShaderModuleRef();
+	}
+
+	const std::u16string kSpirvArg		  = toUtf16( "-spirv" );
+	const std::u16string kSpirvReflectArg = toUtf16( "-fspv-reflect" );
+	const std::u16string kShiftTArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kShiftBArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_UBO ) );
+	const std::u16string kShiftSArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kShiftUArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_UAV ) );
+	const std::u16string kSourceName	  = toUtf16( "DxcCompileHLSL" );
+
+	std::string profileUtf8;
+	std::string defaultEntryPoint;
+	// clang-format off
+	switch ( shaderStage ) {
+		default: {
+			throw VulkanExc("unknown shader stage");
+		} break;
+
+		case VK_SHADER_STAGE_VERTEX_BIT                  : profileUtf8 = "vs_6_0"; defaultEntryPoint = "vsmain"; break;
+		case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT    : profileUtf8 = "hs_6_0"; defaultEntryPoint = "hsmain"; break;
+		case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT : profileUtf8 = "ds_6_0"; defaultEntryPoint = "dsmain"; break;
+		case VK_SHADER_STAGE_GEOMETRY_BIT                : profileUtf8 = "gs_6_0"; defaultEntryPoint = "gsmain"; break;
+		case VK_SHADER_STAGE_FRAGMENT_BIT                : profileUtf8 = "ps_6_0"; defaultEntryPoint = "psmain"; break;
+		case VK_SHADER_STAGE_COMPUTE_BIT                 : profileUtf8 = "cs_6_0"; defaultEntryPoint = "csmain"; break;
+	}
+	// clang-format on
+
+	switch ( shaderModel ) {
+		default: {
+			throw VulkanExc( "unknown shader model" );
+		} break;
+
+		case ShaderModel::SM_6_0: profileUtf8[5] = '0'; break;
+		case ShaderModel::SM_6_1: profileUtf8[5] = '1'; break;
+		case ShaderModel::SM_6_2: profileUtf8[5] = '2'; break;
+		case ShaderModel::SM_6_3: profileUtf8[5] = '3'; break;
+		case ShaderModel::SM_6_4: profileUtf8[5] = '4'; break;
+		case ShaderModel::SM_6_5: profileUtf8[5] = '5'; break;
+		case ShaderModel::SM_6_6: profileUtf8[5] = '6'; break;
+	}
+
+	std::u16string profile	  = toUtf16( profileUtf8 );
+	std::u16string entryPoint = toUtf16( entryPointName.empty() ? defaultEntryPoint : entryPointName );
+
+	ComPtr<IDxcLibrary> library;
+	HRESULT				hr = DxcCreateInstance( CLSID_DxcLibrary, __uuidof( IDxcLibrary ), (void **)&library );
+	if ( FAILED( hr ) ) {
+		throw VulkanExc( "hlsl compile error: create library failed" );
+	}
+
+	ComPtr<IDxcBlobEncoding> source;
+	hr = library->CreateBlobWithEncodingFromPinned(
+		(LPVOID)sourceText.c_str(),
+		static_cast<UINT32>( sourceText.length() ),
+		CP_ACP,
+		&source );
+	if ( FAILED( hr ) ) {
+		throw VulkanExc( "hlsl compile error: create source blob failed" );
+	}
+
+	// clang-format off
+	std::vector<LPCWSTR> arguments = {
+		(LPCWSTR)kSpirvArg.c_str(),
+		(LPCWSTR)kSpirvReflectArg.c_str(),
+		L"-fvk-t-shift", (LPCWSTR)kShiftTArg.c_str(), L"0",
+		L"-fvk-b-shift", (LPCWSTR)kShiftBArg.c_str(), L"0",
+		L"-fvk-s-shift", (LPCWSTR)kShiftSArg.c_str(), L"0",
+		L"-fvk-u-shift", (LPCWSTR)kShiftUArg.c_str(), L"0",
+	};
+	// clang-format on
+
+	std::vector<std::pair<std::u16string, std::u16string>> defineNameValues;
+	//for ( XgiU32 i = 0; i < numDefines; ++i ) {
+	//	xgi::String				 s		= pDefines[i];
+	//	xgi::Vector<xgi::String> tokens = xgi::SplitString( s, xgi::String( "=" ) );
+	//	xgi::WString			 key;
+	//	xgi::WString			 value;
+	//	if ( tokens.size() == 2 ) {
+	//		key	  = StringToWString( tokens[0] );
+	//		value = StringToWString( tokens[1] );
+	//	}
+	//	else if ( tokens.size() == 1 ) {
+	//		key = StringToWString( tokens[0] );
+	//	}
+	//	defineNameValues.emplace_back( std::make_pair( key, value ) );
+	//}
+
+	std::vector<DxcDefine> defines;
+	//for ( auto &elem : defineNameValues ) {
+	//	DxcDefine define = {};
+	//	define.Name		 = elem.first.c_str();
+	//	define.Value	 = elem.second.empty() ? nullptr : elem.second.c_str();
+	//	defines.push_back( define );
+	//}
+
+	ComPtr<IDxcCompiler> compiler;
+	hr = DxcCreateInstance( CLSID_DxcCompiler, __uuidof( IDxcCompiler ), (void **)&compiler );
+	if ( FAILED( hr ) ) {
+		throw VulkanExc( "hlsl compile error: create compiler failed" );
+	}
+
+	ComPtr<IDxcOperationResult> operationResult;
+	hr = compiler->Compile(
+		source.Get(),
+		(LPCWSTR)kSourceName.c_str(),
+		(LPCWSTR)entryPoint.c_str(),
+		(LPCWSTR)profile.c_str(),
+		arguments.data(),
+		static_cast<UINT32>( arguments.size() ),
+		defines.empty() ? nullptr : defines.data(),
+		static_cast<UINT32>( defines.size() ),
+		nullptr,
+		&operationResult );
+	if ( FAILED( hr ) ) {
+		throw VulkanExc( "hlsl compile error: source compile failed" );
+	}
+
+	HRESULT status = S_OK;
+	hr			   = operationResult->GetStatus( &status );
+	if ( FAILED( hr ) || FAILED( status ) ) {
+		std::string				 errorMsg;
+		ComPtr<IDxcBlobEncoding> errors;
+		hr = operationResult->GetErrorBuffer( &errors );
+		if ( SUCCEEDED( hr ) ) {
+			BOOL   known	= FALSE;
+			UINT32 codePage = 0;
+
+			hr = errors->GetEncoding( &known, &codePage );
+			if ( SUCCEEDED( hr ) ) {
+				SIZE_T n = errors->GetBufferSize();
+				if ( n > 0 ) {
+					errorMsg = std::string( (const char *)errors->GetBufferPointer(), n );
+				}
+			}
+		}
+		std::stringstream ss;
+		ss << "hlsl compile error: " << errorMsg;
+		throw VulkanExc( ss.str() );
+	}
+
+	ComPtr<IDxcBlob> result;
+	hr = operationResult->GetResult( &result );
+	if ( FAILED( hr ) ) {
+		throw VulkanExc( "hlsl compile error: failed to get compile result" );
+	}
+
+	SIZE_T sizeInBytes = result->GetBufferSize();
+	if ( sizeInBytes == 0 ) {
+		throw VulkanExc( "hlsl compile error: invalid result size" );
+	}
+
+	const char *pSpirvCode = (const char *)result->GetBufferPointer();
+
+	///*
+	std::stringstream ss;
+	ss << std::setw( 16 ) << std::setfill( '0' ) << std::hex << reinterpret_cast<uintptr_t>( pSpirvCode ) << ".spv";
+	std::string fileName = ss.str();
+
+	std::ofstream os( fileName.c_str(), std::ios::binary );
+	if ( os.is_open() ) {
+		os.write( pSpirvCode, sizeInBytes );
+		os.close();
+
+		cinder::app::console() << "Wrote: " << fileName << std::endl;
+	}
+	//*/
+
+	vk::ShaderModuleRef shaderModule = vk::ShaderModule::create( sizeInBytes, pSpirvCode, device );
 
 	return shaderModule;
 }
