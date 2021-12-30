@@ -10,12 +10,12 @@ class Device;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Objects
 
-struct CI_API VertexAttribute
+struct CI_API InterfaceVariable
 {
-	VertexAttribute() {}
+	InterfaceVariable() {}
 
-	VertexAttribute(const std::string& name, uint32_t location, VkFormat format, geom::Attrib semantic)
-		: mName(name), mLocation(location), mFormat(format), mSemantic(semantic) {}
+	InterfaceVariable( const std::string &name, uint32_t location, VkFormat format, geom::Attrib semantic )
+		: mName( name ), mLocation( location ), mFormat( format ), mSemantic( semantic ) {}
 
 	//! Returns a const reference of the name as defined in the Vertex Shader.
 	const std::string &getName() const { return mName; }
@@ -25,21 +25,32 @@ struct CI_API VertexAttribute
 	VkFormat getFormat() const { return mFormat; }
 	//! Returns the defined geom::Attrib semantic.
 	geom::Attrib getSemantic() const { return mSemantic; }
-	//! Used to derive the expected layout for cpu types within glsl.
 
 private:
 	std::string	 mName;
 	uint32_t	 mLocation = UINT32_MAX;
 	VkFormat	 mFormat   = VK_FORMAT_UNDEFINED;
 	geom::Attrib mSemantic = geom::Attrib::USER_DEFINED;
+	std::string	 mHlslSemantic;
 };
 
 struct DescriptorBinding
 {
-	VkDescriptorType type;
-	uint32_t		 binding;
-	uint32_t		 set;
-	std::string		 name;
+	DescriptorBinding() {}
+
+	DescriptorBinding( const std::string &name, VkDescriptorType type, uint32_t binding, uint32_t set )
+		: mName( name ), mType( type ), mBinding( binding ), mSet( set ) {}
+
+	const std::string &getName() const { return mName; }
+	VkDescriptorType   getType() const { return mType; }
+	uint32_t		   getBinding() const { return mBinding; }
+	uint32_t		   getSet() const { return mSet; }
+
+private:
+	std::string		 mName;
+	VkDescriptorType mType;
+	uint32_t		 mBinding;
+	uint32_t		 mSet;
 };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

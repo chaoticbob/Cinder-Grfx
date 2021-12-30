@@ -560,7 +560,7 @@ void Context::assignVertexAttributeLocations()
 			auto it = std::find_if(
 				programVertexAttributes.begin(),
 				programVertexAttributes.end(),
-				[semantic]( const vk::VertexAttribute &elem ) -> bool {
+				[semantic]( const vk::InterfaceVariable &elem ) -> bool {
 					bool isSame = ( elem.getSemantic() == semantic );
 					return isSame;
 				} );

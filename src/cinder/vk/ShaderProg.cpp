@@ -18,6 +18,10 @@ using Microsoft::WRL::ComPtr;
 
 namespace cinder::vk {
 
+const uint32_t SPIRV_STARTING_WORD_INDEX = 5;
+const uint32_t SPIRV_WORD_SIZE			 = sizeof( uint32_t );
+const uint32_t SPIRV_MINIMUM_FILE_SIZE	 = SPIRV_STARTING_WORD_INDEX * SPIRV_WORD_SIZE;
+
 static const std::string CI_VK_DEFAULT_UNIFORM_BLOCK_NAME = "gl_DefaultUniformBlock";
 static const std::string CI_VK_HLSL_GLOBALS_NAME		  = "$Globals";
 
@@ -131,49 +135,81 @@ vk::ShaderModuleRef ShaderModule::create( const std::vector<char> &spirv, vk::De
 }
 
 ShaderModule::ShaderModule( vk::DeviceRef device, size_t spirvSize, const char *pSpirvCode )
-	: vk::DeviceChildObject( device ),
-	  mSpirv( pSpirvCode, pSpirvCode + spirvSize )
+	: vk::DeviceChildObject( device )
 {
-	// Refelection
+	if ( ( spirvSize < SPIRV_MINIMUM_FILE_SIZE ) || ( pSpirvCode == nullptr ) ) {
+		throw VulkanExc( "invalid SPIR-V data" );
+	}
+
+	const uint32_t sig = *( reinterpret_cast<const uint32_t *>( pSpirvCode ) );
+	if ( sig != SpvMagicNumber ) {
+		throw VulkanExc( "invalid SPIR-V magic number" );
+	}
+
+	// Reflection
 	{
-		mReflection = spv_reflect::ShaderModule( mSpirv.size(), mSpirv.data() );
-		if ( mReflection.GetResult() != SPV_REFLECT_RESULT_SUCCESS ) {
+		auto reflection = spv_reflect::ShaderModule( spirvSize, pSpirvCode );
+		if ( reflection.GetResult() != SPV_REFLECT_RESULT_SUCCESS ) {
 			throw VulkanExc( "SPIR-V reflection failed" );
 		}
 
+		// Shader stage
 		// clang-format off
-		switch (mReflection.GetShaderStage()) {
-		default: {
-			throw VulkanExc( "SPIR-V reflection: unrecognized shader stage" );
-		} break;
+		switch (reflection.GetShaderStage()) {
+			default: {
+				throw VulkanExc( "SPIR-V reflection: unrecognized shader stage" );
+			} break;
 
-		case SPV_REFLECT_SHADER_STAGE_VERTEX_BIT                  :	mShaderStage = VK_SHADER_STAGE_VERTEX_BIT                 ; break;
-		case SPV_REFLECT_SHADER_STAGE_TESSELLATION_CONTROL_BIT    :	mShaderStage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT   ; break;
-		case SPV_REFLECT_SHADER_STAGE_TESSELLATION_EVALUATION_BIT :	mShaderStage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT; break;
-		case SPV_REFLECT_SHADER_STAGE_GEOMETRY_BIT                :	mShaderStage = VK_SHADER_STAGE_GEOMETRY_BIT               ; break;
-		case SPV_REFLECT_SHADER_STAGE_FRAGMENT_BIT                :	mShaderStage = VK_SHADER_STAGE_FRAGMENT_BIT               ; break;
-		case SPV_REFLECT_SHADER_STAGE_COMPUTE_BIT                 :	mShaderStage = VK_SHADER_STAGE_COMPUTE_BIT                ; break;
-		case SPV_REFLECT_SHADER_STAGE_TASK_BIT_NV                 :	mShaderStage = VK_SHADER_STAGE_TASK_BIT_NV                ; break;
-		case SPV_REFLECT_SHADER_STAGE_MESH_BIT_NV                 :	mShaderStage = VK_SHADER_STAGE_MESH_BIT_NV                ; break;
-		case SPV_REFLECT_SHADER_STAGE_RAYGEN_BIT_KHR              :	mShaderStage = VK_SHADER_STAGE_RAYGEN_BIT_KHR             ; break;
-		case SPV_REFLECT_SHADER_STAGE_ANY_HIT_BIT_KHR             :	mShaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR            ; break;
-		case SPV_REFLECT_SHADER_STAGE_CLOSEST_HIT_BIT_KHR         :	mShaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR        ; break;
-		case SPV_REFLECT_SHADER_STAGE_MISS_BIT_KHR                :	mShaderStage = VK_SHADER_STAGE_MISS_BIT_KHR               ; break;
-		case SPV_REFLECT_SHADER_STAGE_INTERSECTION_BIT_KHR        :	mShaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR       ; break;
-		case SPV_REFLECT_SHADER_STAGE_CALLABLE_BIT_KHR            :	mShaderStage = VK_SHADER_STAGE_CALLABLE_BIT_KHR           ; break;
+			case SPV_REFLECT_SHADER_STAGE_VERTEX_BIT                  :	mShaderStage = VK_SHADER_STAGE_VERTEX_BIT                 ; break;
+			case SPV_REFLECT_SHADER_STAGE_TESSELLATION_CONTROL_BIT    :	mShaderStage = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT   ; break;
+			case SPV_REFLECT_SHADER_STAGE_TESSELLATION_EVALUATION_BIT :	mShaderStage = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT; break;
+			case SPV_REFLECT_SHADER_STAGE_GEOMETRY_BIT                :	mShaderStage = VK_SHADER_STAGE_GEOMETRY_BIT               ; break;
+			case SPV_REFLECT_SHADER_STAGE_FRAGMENT_BIT                :	mShaderStage = VK_SHADER_STAGE_FRAGMENT_BIT               ; break;
+			case SPV_REFLECT_SHADER_STAGE_COMPUTE_BIT                 :	mShaderStage = VK_SHADER_STAGE_COMPUTE_BIT                ; break;
+			case SPV_REFLECT_SHADER_STAGE_TASK_BIT_NV                 :	mShaderStage = VK_SHADER_STAGE_TASK_BIT_NV                ; break;
+			case SPV_REFLECT_SHADER_STAGE_MESH_BIT_NV                 :	mShaderStage = VK_SHADER_STAGE_MESH_BIT_NV                ; break;
+			case SPV_REFLECT_SHADER_STAGE_RAYGEN_BIT_KHR              :	mShaderStage = VK_SHADER_STAGE_RAYGEN_BIT_KHR             ; break;
+			case SPV_REFLECT_SHADER_STAGE_ANY_HIT_BIT_KHR             :	mShaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR            ; break;
+			case SPV_REFLECT_SHADER_STAGE_CLOSEST_HIT_BIT_KHR         :	mShaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR        ; break;
+			case SPV_REFLECT_SHADER_STAGE_MISS_BIT_KHR                :	mShaderStage = VK_SHADER_STAGE_MISS_BIT_KHR               ; break;
+			case SPV_REFLECT_SHADER_STAGE_INTERSECTION_BIT_KHR        :	mShaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR       ; break;
+			case SPV_REFLECT_SHADER_STAGE_CALLABLE_BIT_KHR            :	mShaderStage = VK_SHADER_STAGE_CALLABLE_BIT_KHR           ; break;
 		}
 		// clang-format on
 
-		parseDescriptorBindings();
-		parseUniformBlocks();
+		// Entry point
+		mEntryPoint = reflection.GetEntryPointName();
+
+		// Source langauge
+		mSourceLanguage = reflection.GetShaderModule().source_language;
+
+		// SPIR-v bindings
+		std::vector<SpvReflectDescriptorBinding *> spirvBindings;
+		{
+			uint32_t		 count	= 0;
+			SpvReflectResult spvres = reflection.EnumerateDescriptorBindings( &count, nullptr );
+			if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+				throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding count failed" );
+			}
+
+			spirvBindings.resize( count );
+			spvres = reflection.EnumerateDescriptorBindings( &count, dataPtr( spirvBindings ) );
+			if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+				throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding failed" );
+			}
+		}
+
+		parseInterfaceVariables( reflection );
+		parseDescriptorBindings( spirvBindings );
+		parseUniformBlocks( spirvBindings );
 	}
 
 	// Creat shader module
 	VkShaderModuleCreateInfo vkci = { VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO };
 	vkci.pNext					  = nullptr;
 	vkci.flags					  = 0;
-	vkci.codeSize				  = mSpirv.size();
-	vkci.pCode					  = reinterpret_cast<const uint32_t *>( dataPtr( mSpirv ) );
+	vkci.codeSize				  = spirvSize;
+	vkci.pCode					  = reinterpret_cast<const uint32_t *>( pSpirvCode );
 
 	VkResult vkres = CI_VK_DEVICE_FN( CreateShaderModule(
 		getDeviceHandle(),
@@ -196,18 +232,122 @@ ShaderModule::~ShaderModule()
 	}
 }
 
-void ShaderModule::parseDescriptorBindings()
+void ShaderModule::parseInterfaceVariables( const spv_reflect::ShaderModule &reflection )
 {
-	uint32_t		 count	= 0;
-	SpvReflectResult spvres = mReflection.EnumerateDescriptorBindings( &count, nullptr );
-	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
-		throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding count failed" );
+	// Input variables
+	{
+		uint32_t		 count	= 0;
+		SpvReflectResult spvres = reflection.EnumerateInputVariables( &count, nullptr );
+		if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+			throw VulkanExc( "SPIR-V reflection: enumerate input variables count failed" );
+		}
+
+		std::vector<SpvReflectInterfaceVariable *> spirvVars( count );
+		spvres = reflection.EnumerateInputVariables( &count, dataPtr( spirvVars ) );
+		if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+			throw VulkanExc( "SPIR-V reflection: enumerate input variables failed" );
+		}
+
+		for ( size_t i = 0; i < spirvVars.size(); ++i ) {
+			const SpvReflectInterfaceVariable *pSpvVar = spirvVars[i];
+
+			// Skip invalid locations - there are usually system input variables
+			// that's inaccessible to the shader anyway.
+			if ( pSpvVar->location == UINT32_MAX ) {
+				continue;
+			}
+
+			std::string	 name	  = pSpvVar->name;
+			uint32_t	 location = pSpvVar->location;
+			VkFormat	 format	  = static_cast<VkFormat>( pSpvVar->format );
+			geom::Attrib semantic = geom::Attrib::USER_DEFINED;
+
+			auto it = sDefaultAttribNameToSemanticMap.find( name );
+			if ( it != sDefaultAttribNameToSemanticMap.end() ) {
+				semantic = it->second;
+			}
+
+			mInputVariables.emplace_back( name, location, format, semantic );
+		}
 	}
 
-	mSpirvBindings.resize( count );
-	spvres = mReflection.EnumerateDescriptorBindings( &count, dataPtr( mSpirvBindings ) );
-	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
-		throw VulkanExc( "SPIR-V reflection: enumerate descriptor binding failed" );
+	// Output variables
+	{
+		uint32_t		 count	= 0;
+		SpvReflectResult spvres = reflection.EnumerateOutputVariables( &count, nullptr );
+		if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+			throw VulkanExc( "SPIR-V reflection: enumerate input variables count failed" );
+		}
+
+		std::vector<SpvReflectInterfaceVariable *> spirvVars( count );
+		spvres = reflection.EnumerateOutputVariables( &count, dataPtr( spirvVars ) );
+		if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+			throw VulkanExc( "SPIR-V reflection: enumerate input variables failed" );
+		}
+
+		for ( size_t i = 0; i < spirvVars.size(); ++i ) {
+			const SpvReflectInterfaceVariable *pSpvVar = spirvVars[i];
+
+			// Skip invalid locations - there are usually system input variables
+			// that's inaccessible to the shader anyway.
+			if ( pSpvVar->location == UINT32_MAX ) {
+				continue;
+			}
+
+			std::string	 name	  = pSpvVar->name;
+			uint32_t	 location = pSpvVar->location;
+			VkFormat	 format	  = static_cast<VkFormat>( pSpvVar->format );
+			geom::Attrib semantic = geom::Attrib::USER_DEFINED;
+
+			auto it = sDefaultAttribNameToSemanticMap.find( name );
+			if ( it != sDefaultAttribNameToSemanticMap.end() ) {
+				semantic = it->second;
+			}
+
+			mOutputVariables.emplace_back( name, location, format, semantic );
+		}
+	}
+}
+
+void ShaderModule::parseDescriptorBindings( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings )
+{
+	for ( size_t i = 0; i < spirvBindings.size(); ++i ) {
+		const SpvReflectDescriptorBinding *pSpvBinding = spirvBindings[i];
+
+		VkDescriptorType descriptorType = static_cast<VkDescriptorType>( ~0 );
+
+		// clang-format off
+		switch ( pSpvBinding->descriptor_type ) {
+			default: {
+				throw VulkanExc( "SPIR-V reflection: unrecognized descriptor type" );
+			} break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER                    : descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER                   ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER     : descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER    ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE              : descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE             ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE              : descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE             ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER       : descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER      ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER       : descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER      ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER             : descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER            ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER             : descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER            ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC     : descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC    ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC     : descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC    ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_INPUT_ATTACHMENT           : descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT          ; break;
+			case SPV_REFLECT_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR; break;
+		}
+		// clang-format on
+
+		// Binding name
+		std::string name = pSpvBinding->name;
+
+		// Set binding name to block name if name is empty and is default uniform  block
+		if ( ( descriptorType == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ) && name.empty() ) {
+			std::string blockName = spvReflectBlockVariableTypeName( &pSpvBinding->block );
+			if ( blockName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+				name = blockName;
+			}
+		}
+
+		mDescriptorBindings.emplace_back( name, descriptorType, pSpvBinding->binding, pSpvBinding->set );
 	}
 }
 
@@ -323,13 +463,13 @@ static void parseSpirvUniformBlock( std::string prefix, const SpvReflectBlockVar
 	}
 }
 
-void ShaderModule::parseUniformBlocks()
+void ShaderModule::parseUniformBlocks( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings )
 {
-	bool isGlsl = ( mReflection.GetShaderModule().source_language == SpvSourceLanguageGLSL );
-	bool isHlsl = ( mReflection.GetShaderModule().source_language == SpvSourceLanguageHLSL );
+	bool isGlsl = ( mSourceLanguage == SpvSourceLanguageGLSL );
+	bool isHlsl = ( mSourceLanguage == SpvSourceLanguageHLSL );
 
-	for ( size_t i = 0; i < mSpirvBindings.size(); ++i ) {
-		const SpvReflectDescriptorBinding *pSpvBinding = mSpirvBindings[i];
+	for ( size_t i = 0; i < spirvBindings.size(); ++i ) {
+		const SpvReflectDescriptorBinding *pSpvBinding = spirvBindings[i];
 		if ( pSpvBinding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER ) {
 			continue;
 		}
@@ -362,105 +502,9 @@ void ShaderModule::parseUniformBlocks()
 	}
 }
 
-const char *ShaderModule::getEntryPoint() const
+const std::vector<vk::InterfaceVariable> &ShaderModule::getVertexAttributes() const
 {
-	return mReflection.GetEntryPointName();
-}
-
-std::vector<vk::VertexAttribute> ShaderModule::getVertexAttributes() const
-{
-	std::vector<vk::VertexAttribute> attributes;
-	if ( mShaderStage == VK_SHADER_STAGE_VERTEX_BIT ) {
-		uint32_t count	= 0;
-		auto	 spvRes = mReflection.EnumerateInputVariables( &count, nullptr );
-
-		std::vector<SpvReflectInterfaceVariable *> inputVars;
-		if ( ( spvRes == SPV_REFLECT_RESULT_SUCCESS ) && ( count > 0 ) ) {
-			inputVars.resize( count );
-			spvRes = mReflection.EnumerateInputVariables( &count, dataPtr( inputVars ) );
-		}
-
-		if ( ( spvRes == SPV_REFLECT_RESULT_SUCCESS ) && !inputVars.empty() ) {
-			for ( size_t i = 0; i < inputVars.size(); ++i ) {
-				SpvReflectInterfaceVariable *pVar = inputVars[i];
-
-				// Skip invalid locations - there are usually system input variables
-				// that's inaccessible to the shader anyway.
-				if ( pVar->location == UINT32_MAX ) {
-					continue;
-				}
-
-				std::string	 name	  = pVar->name;
-				uint32_t	 location = pVar->location;
-				VkFormat	 format	  = static_cast<VkFormat>( pVar->format );
-				geom::Attrib semantic = geom::Attrib::USER_DEFINED;
-
-				auto it = sDefaultAttribNameToSemanticMap.find( name );
-				if ( it != sDefaultAttribNameToSemanticMap.end() ) {
-					semantic = it->second;
-				}
-
-				vk::VertexAttribute attr = vk::VertexAttribute( name, location, format, semantic );
-				attributes.push_back( attr );
-			}
-		}
-	}
-	return attributes;
-}
-
-std::vector<vk::DescriptorBinding> ShaderModule::getDescriptorBindings() const
-{
-	std::vector<DescriptorBinding> bindings;
-	for ( size_t i = 0; i < mSpirvBindings.size(); ++i ) {
-		const SpvReflectDescriptorBinding *pSpvBinding = mSpirvBindings[i];
-
-		vk::DescriptorBinding binding = {};
-
-		// clang-format off
-		switch ( pSpvBinding->descriptor_type ) {
-			default: {
-				throw VulkanExc( "SPIR-V reflection: unrecognized descriptor type" );
-			} break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLER                    : binding.type = VK_DESCRIPTOR_TYPE_SAMPLER                   ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER     : binding.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER    ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_SAMPLED_IMAGE              : binding.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE             ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_IMAGE              : binding.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE             ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER       : binding.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER      ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER       : binding.type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER      ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER             : binding.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER            ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER             : binding.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER            ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC     : binding.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC    ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC     : binding.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC    ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_INPUT_ATTACHMENT           : binding.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT          ; break;
-			case SPV_REFLECT_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : binding.type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR; break;
-		}
-		// clang-format on
-
-		binding.binding = pSpvBinding->binding;
-		binding.set		= pSpvBinding->set;
-		binding.name	= pSpvBinding->name;
-
-		// Set binding name to block name if name is empty and is default uniform  block
-		if ( ( binding.type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ) && binding.name.empty() ) {
-			std::string blockName = spvReflectBlockVariableTypeName( &pSpvBinding->block );
-			if ( blockName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
-				binding.name = blockName;
-			}
-		}
-
-		bindings.push_back( binding );
-	}
-
-	return bindings;
-}
-
-std::vector<const vk::UniformBlock *> ShaderModule::getUniformBlocks() const
-{
-	std::vector<const vk::UniformBlock *> blocks;
-	for ( const auto &block : mUniformBlocks ) {
-		blocks.push_back( block.get() );
-	}
-	return blocks;
+	return ( mShaderStage == VK_SHADER_STAGE_VERTEX_BIT ) ? mInputVariables : mNullVariables;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -547,10 +591,6 @@ ShaderProg::ShaderProg( vk::DeviceRef device, const Format &format )
 		mCS = vk::ShaderModule::create( format.mComputeDataSource, device );
 	}
 
-	if ( mVS ) {
-		mVertexAttributes = mVS->getVertexAttributes();
-	}
-
 	parseDscriptorBindings( mVS.get() );
 	parseDscriptorBindings( mPS.get() );
 	parseDscriptorBindings( mGS.get() );
@@ -576,17 +616,18 @@ void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
 		return;
 	}
 
-	auto bindings = shader->getDescriptorBindings();
+	auto descriptorBindings = shader->getDescriptorBindings();
 
-	for ( const auto &binding : bindings ) {
+	for ( const auto &binding : descriptorBindings ) {
 		// Get reference to bindings vector
-		auto &bindings = mDescriptorSetBindings[binding.set];
+		const uint32_t setNumber = binding.getSet();
+		auto &		   bindings	 = mDescriptorSetBindings[setNumber];
 		// Look binding using binding number
 		auto it = std::find_if(
 			bindings.begin(),
 			bindings.end(),
-			[binding]( const DescriptorBinding &elem ) -> bool {
-				bool isMatchBinding = ( elem.binding == binding.binding );
+			[binding]( const vk::DescriptorBinding &elem ) -> bool {
+				bool isMatchBinding = ( elem.getBinding() == binding.getBinding() );
 				return isMatchBinding;
 			} );
 		// Add if the binding if not match is found
@@ -595,9 +636,9 @@ void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
 		}
 		// Types must match if binding exists
 		else {
-			if ( binding.type != it->type ) {
+			if ( binding.getType() != it->getType() ) {
 				std::stringstream ss;
-				ss << "descriptor type mismatch where binding=" << binding.binding << ", set=" << binding.set;
+				ss << "descriptor type mismatch where binding=" << binding.getBinding() << ", set=" << binding.getSet();
 				throw VulkanExc( ss.str() );
 			}
 		}
@@ -610,7 +651,7 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 		return;
 	}
 
-	auto blocks = shader->getUniformBlocks();
+	auto &blocks = shader->getUniformBlocks();
 	for ( const auto &block : blocks ) {
 		if ( ( block->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( block->getName() == CI_VK_HLSL_GLOBALS_NAME ) ) {
 			// Add default uniform blcok if we don't have one...
@@ -672,6 +713,11 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 			}
 		}
 	}
+}
+
+const std::vector<vk::InterfaceVariable> &ShaderProg::getVertexAttributes() const
+{
+	return mVS ? mVS->getVertexAttributes() : mNullVariables;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -754,30 +800,6 @@ GlslProg::GlslProg( vk::DeviceRef device, const ShaderProg::Format &format )
 GlslProg::~GlslProg()
 {
 }
-
-/*
-void GlslProg::loadShader( DataSourceRef dataSource, std::string &sourceTarget )
-{
-	if ( !dataSource ) {
-		return;
-	}
-
-	ci::BufferRef buffer;
-	if ( dataSource->isFilePath() ) {
-		buffer = loadFile( dataSource->getFilePath() )->getBuffer();
-	}
-	else if ( dataSource->isUrl() ) {
-		buffer = loadUrl( dataSource->getUrl() )->getBuffer();
-	}
-	else {
-		buffer = dataSource->getBuffer();
-	}
-
-	const char *start = static_cast<const char *>( buffer->getData() );
-	const char *end	  = start + buffer->getSize();
-	sourceTarget	  = std::string( start, end );
-}
-*/
 
 class Glslang
 {

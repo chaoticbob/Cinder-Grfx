@@ -18,41 +18,49 @@ class ShaderModule
 	: public vk::DeviceChildObject
 {
 public:
-	///////////////////////////////////////////////////////////////////////////////////////////////////
-
 	~ShaderModule();
 
 	static vk::ShaderModuleRef create( DataSourceRef dataSource, vk::DeviceRef device = vk::DeviceRef() );
 	static vk::ShaderModuleRef create( size_t sizeInBytes, const char *pSpirvCode, vk::DeviceRef device = vk::DeviceRef() );
 	static vk::ShaderModuleRef create( const std::vector<char> &spirv, vk::DeviceRef device = vk::DeviceRef() );
 
-	const char *getEntryPoint() const;
-
 	VkShaderStageFlagBits getShaderStage() const { return mShaderStage; }
 
+	const std::string &getEntryPoint() const { return mEntryPoint; }
+
+	SpvSourceLanguage getSourceLanguage() const { return mSourceLanguage; }
+
+	const std::vector<vk::InterfaceVariable> &getInputVariables() const { return mInputVariables; }
+
+	const std::vector<vk::InterfaceVariable> &getOutputVariables() const { return mOutputVariables; }
+
+	const std::vector<vk::InterfaceVariable> &getVertexAttributes() const;
+
+	const std::vector<vk::DescriptorBinding> &getDescriptorBindings() const { return mDescriptorBindings; }
+
+	const std::vector<std::unique_ptr<vk::UniformBlock>> &getUniformBlocks() const { return mUniformBlocks; }
+
 	VkShaderModule getShaderModuleHandle() const { return mShaderModuleHandle; }
-
-	std::vector<vk::VertexAttribute> getVertexAttributes() const;
-
-	std::vector<vk::DescriptorBinding> getDescriptorBindings() const;
-
-	std::vector<const vk::UniformBlock *> getUniformBlocks() const;
 
 private:
 	ShaderModule( vk::DeviceRef device, size_t spirvSize, const char *pSpirvCode );
 
-	void parseDescriptorBindings();
-	void parseUniformBlocks();
+	void parseInterfaceVariables( const spv_reflect::ShaderModule &reflection );
+	void parseDescriptorBindings( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings );
+	void parseUniformBlocks( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings );
 
 private:
-	std::vector<char>							   mSpirv;
-	spv_reflect::ShaderModule					   mReflection;
-	SpvSourceLanguage							   mSourceLanguage;
-	std::vector<SpvReflectDescriptorBinding *>	   mSpirvBindings;
+	VkShaderStageFlagBits						   mShaderStage = static_cast<VkShaderStageFlagBits>( 0 );
+	std::string									   mEntryPoint;
+	SpvSourceLanguage							   mSourceLanguage = SpvSourceLanguageUnknown;
+	std::vector<vk::InterfaceVariable>			   mInputVariables;
+	std::vector<vk::InterfaceVariable>			   mOutputVariables;
+	std::vector<vk::InterfaceVariable>			   mNullVariables;
+	std::vector<vk::DescriptorBinding>			   mDescriptorBindings;
 	std::vector<std::unique_ptr<vk::UniformBlock>> mUniformBlocks;
 	vk::UniformBlock *							   mDefaultUniformBlock = nullptr;
-	VkShaderStageFlagBits						   mShaderStage			= static_cast<VkShaderStageFlagBits>( 0 );
-	VkShaderModule								   mShaderModuleHandle	= VK_NULL_HANDLE;
+
+	VkShaderModule mShaderModuleHandle = VK_NULL_HANDLE;
 };
 
 //! @class ShaderProg
@@ -61,8 +69,6 @@ private:
 class CI_API ShaderProg
 {
 public:
-	///////////////////////////////////////////////////////////////////////////////////////////////////
-
 	struct CI_API Format
 	{
 		Format() {}
@@ -162,7 +168,7 @@ public:
 	vk::ShaderModuleRef getHullShader() const { return mHS; }
 	vk::ShaderModuleRef getDomainShader() const { return mDS; }
 
-	const std::vector<VertexAttribute> &getVertexAttributes() const { return mVertexAttributes; }
+	const std::vector<vk::InterfaceVariable> &getVertexAttributes() const;
 
 	const std::map<uint32_t, std::vector<DescriptorBinding>> &getDescriptorsetBindings() const { return mDescriptorSetBindings; }
 
@@ -182,7 +188,7 @@ private:
 	vk::ShaderModuleRef mDS; // Domain / Tessellation Evaluate
 	vk::ShaderModuleRef mCS; // Compute
 
-	std::vector<VertexAttribute>					   mVertexAttributes;
+	std::vector<vk::InterfaceVariable>				   mNullVariables;
 	std::map<uint32_t, std::vector<DescriptorBinding>> mDescriptorSetBindings;
 	std::vector<std::unique_ptr<UniformBlock>>		   mUniformBlocks;
 	UniformBlock *									   mDefaultUniformBlock = nullptr;

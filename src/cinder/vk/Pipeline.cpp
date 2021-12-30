@@ -163,7 +163,7 @@ void Pipeline::initShaderStages(
 		VkPipelineShaderStageCreateInfo ssci = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 		ssci.flags							 = 0;
 		ssci.pSpecializationInfo			 = nullptr;
-		ssci.pName							 = shaderModule->getEntryPoint();
+		ssci.pName							 = shaderModule->getEntryPoint().c_str();
 		ssci.stage							 = VK_SHADER_STAGE_VERTEX_BIT;
 		ssci.module							 = shaderModule->getShaderModuleHandle();
 		shaderStages.push_back( ssci );
@@ -175,7 +175,7 @@ void Pipeline::initShaderStages(
 		VkPipelineShaderStageCreateInfo ssci = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 		ssci.flags							 = 0;
 		ssci.pSpecializationInfo			 = nullptr;
-		ssci.pName							 = shaderModule->getEntryPoint();
+		ssci.pName							 = shaderModule->getEntryPoint().c_str();
 		ssci.stage							 = VK_SHADER_STAGE_FRAGMENT_BIT;
 		ssci.module							 = shaderModule->getShaderModuleHandle();
 		shaderStages.push_back( ssci );
@@ -187,7 +187,7 @@ void Pipeline::initShaderStages(
 		VkPipelineShaderStageCreateInfo ssci = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 		ssci.flags							 = 0;
 		ssci.pSpecializationInfo			 = nullptr;
-		ssci.pName							 = shaderModule->getEntryPoint();
+		ssci.pName							 = shaderModule->getEntryPoint().c_str();
 		ssci.stage							 = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
 		ssci.module							 = shaderModule->getShaderModuleHandle();
 		shaderStages.push_back( ssci );
@@ -199,7 +199,7 @@ void Pipeline::initShaderStages(
 		VkPipelineShaderStageCreateInfo ssci = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 		ssci.flags							 = 0;
 		ssci.pSpecializationInfo			 = nullptr;
-		ssci.pName							 = shaderModule->getEntryPoint();
+		ssci.pName							 = shaderModule->getEntryPoint().c_str();
 		ssci.stage							 = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
 		ssci.module							 = shaderModule->getShaderModuleHandle();
 		shaderStages.push_back( ssci );
@@ -211,7 +211,7 @@ void Pipeline::initShaderStages(
 		VkPipelineShaderStageCreateInfo ssci = { VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO };
 		ssci.flags							 = 0;
 		ssci.pSpecializationInfo			 = nullptr;
-		ssci.pName							 = shaderModule->getEntryPoint();
+		ssci.pName							 = shaderModule->getEntryPoint().c_str();
 		ssci.stage							 = VK_SHADER_STAGE_GEOMETRY_BIT;
 		ssci.module							 = shaderModule->getShaderModuleHandle();
 		shaderStages.push_back( ssci );
