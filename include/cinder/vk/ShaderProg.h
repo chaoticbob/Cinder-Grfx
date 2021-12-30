@@ -140,20 +140,20 @@ public:
 
 	//! Create a shader program from shader modules
 	static ShaderProgRef create(
-		vk::ShaderModuleRef vertexShader,
-		vk::ShaderModuleRef fragmentShader = vk::ShaderModuleRef(),
-		vk::ShaderModuleRef geometryShader = vk::ShaderModuleRef(),
-		vk::ShaderModuleRef tessEvalShader = vk::ShaderModuleRef(),
-		vk::ShaderModuleRef tessCtrlShader = vk::ShaderModuleRef() );
+		vk::ShaderModuleRef vertModule,
+		vk::ShaderModuleRef fragModule = vk::ShaderModuleRef(),
+		vk::ShaderModuleRef geomModule = vk::ShaderModuleRef(),
+		vk::ShaderModuleRef teseModule = vk::ShaderModuleRef(),
+		vk::ShaderModuleRef tescModule = vk::ShaderModuleRef() );
 
 	//! Create a shader program from SPIR-V data sources
 	static ShaderProgRef create(
 		vk::DeviceRef device,
-		DataSourceRef vertexDataSource,
-		DataSourceRef fragmentDataSource = DataSourceRef(),
-		DataSourceRef geometryDataSource = DataSourceRef(),
-		DataSourceRef tessEvalDataSource = DataSourceRef(),
-		DataSourceRef tessCtrlDataSource = DataSourceRef() );
+		DataSourceRef vertSpirv,
+		DataSourceRef fragSpirv = DataSourceRef(),
+		DataSourceRef geomSpirv = DataSourceRef(),
+		DataSourceRef teseSpirv = DataSourceRef(),
+		DataSourceRef tescSpirv = DataSourceRef() );
 
 	bool isCompute() const { return mCS ? true : false; }
 
@@ -204,34 +204,34 @@ public:
 	virtual ~GlslProg();
 
 	static GlslProgRef create(
-		DataSourceRef vertexShader,
-		DataSourceRef fragmentShader = DataSourceRef(),
-		DataSourceRef geometryShader = DataSourceRef(),
-		DataSourceRef tessEvalShader = DataSourceRef(),
-		DataSourceRef tessCtrlShader = DataSourceRef() );
+		const DataSourceRef &vertTextDataSource,
+		const DataSourceRef &fragTextDataSource = DataSourceRef(),
+		const DataSourceRef &geomTextDataSource = DataSourceRef(),
+		const DataSourceRef &teseTextDataSource = DataSourceRef(),
+		const DataSourceRef &tescTextDataSource = DataSourceRef() );
 
 	static GlslProgRef create(
 		vk::DeviceRef device,
-		DataSourceRef vertexShader,
-		DataSourceRef fragmentShader = DataSourceRef(),
-		DataSourceRef geometryShader = DataSourceRef(),
-		DataSourceRef tessEvalShader = DataSourceRef(),
-		DataSourceRef tessCtrlShader = DataSourceRef() );
+		const DataSourceRef &vertTextDataSource,
+		const DataSourceRef &fragTextDataSource = DataSourceRef(),
+		const DataSourceRef &geomTextDataSource = DataSourceRef(),
+		const DataSourceRef &teseTextDataSource = DataSourceRef(),
+		const DataSourceRef &tescTextDataSource = DataSourceRef() );
 
 	static GlslProgRef create(
-		const std::string &vertexShader,
-		const std::string &fragmentShader = std::string(),
-		const std::string &geometryShader = std::string(),
-		const std::string &tessEvalShader = std::string(),
-		const std::string &tessCtrlShader = std::string() );
+		const std::string &vertText,
+		const std::string &fragText = std::string(),
+		const std::string &geomText = std::string(),
+		const std::string &teseText = std::string(),
+		const std::string &tescText = std::string() );
 
 	static GlslProgRef create(
 		vk::DeviceRef	   device,
-		const std::string &vertexShader,
-		const std::string &fragmentShader = std::string(),
-		const std::string &geometryShader = std::string(),
-		const std::string &tessEvalShader = std::string(),
-		const std::string &tessCtrlShader = std::string() );
+		const std::string &vertText,
+		const std::string &fragText = std::string(),
+		const std::string &geomText = std::string(),
+		const std::string &teseText = std::string(),
+		const std::string &tescText = std::string() );
 
 	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
 
@@ -268,34 +268,34 @@ public:
 	virtual ~HlslProg();
 
 	static HlslProgRef create(
-		DataSourceRef vs,
-		DataSourceRef ps = DataSourceRef(),
-		DataSourceRef gs = DataSourceRef(),
-		DataSourceRef ds = DataSourceRef(),
-		DataSourceRef hs = DataSourceRef() );
+		const DataSourceRef &vsTextDataSource,
+		const DataSourceRef &psTextDataSource = DataSourceRef(),
+		const DataSourceRef &gsTextDataSource = DataSourceRef(),
+		const DataSourceRef &dsTextDataSource = DataSourceRef(),
+		const DataSourceRef &hsTextDataSource = DataSourceRef() );
 
 	static HlslProgRef create(
 		vk::DeviceRef device,
-		DataSourceRef vs,
-		DataSourceRef ps = DataSourceRef(),
-		DataSourceRef gs = DataSourceRef(),
-		DataSourceRef ds = DataSourceRef(),
-		DataSourceRef hs = DataSourceRef() );
+		const DataSourceRef &vsTextDataSource,
+		const DataSourceRef &psTextDataSource = DataSourceRef(),
+		const DataSourceRef &gsTextDataSource = DataSourceRef(),
+		const DataSourceRef &dsTextDataSource = DataSourceRef(),
+		const DataSourceRef &hsTextDataSource = DataSourceRef() );
 
 	static HlslProgRef create(
-		const std::string &vsSource,
-		const std::string &psSource = std::string(),
-		const std::string &gsSource = std::string(),
-		const std::string &dsSource = std::string(),
-		const std::string &hsSource = std::string() );
+		const std::string &vsText,
+		const std::string &psText = std::string(),
+		const std::string &gsText = std::string(),
+		const std::string &dsText = std::string(),
+		const std::string &hsText = std::string() );
 
 	static HlslProgRef create(
 		vk::DeviceRef	   device,
-		const std::string &vsSource,
-		const std::string &psSource = std::string(),
-		const std::string &gsSource = std::string(),
-		const std::string &dsSource = std::string(),
-		const std::string &hsSource = std::string() );
+		const std::string &vsText,
+		const std::string &psText = std::string(),
+		const std::string &gsText = std::string(),
+		const std::string &dsText = std::string(),
+		const std::string &hsText = std::string() );
 
 	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
 

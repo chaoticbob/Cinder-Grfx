@@ -77,7 +77,7 @@ static std::map<std::string, geom::Attrib> sDefaultAttribNameToSemanticMap = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Helper functions
 
-static void loadShaderSource( DataSourceRef dataSource, std::string &sourceTarget )
+static void loadShaderText( DataSourceRef dataSource, std::string &sourceTarget )
 {
 	if ( !dataSource ) {
 		return;
@@ -724,63 +724,63 @@ const std::vector<vk::InterfaceVariable> &ShaderProg::getVertexAttributes() cons
 // GlslProg
 
 GlslProgRef GlslProg::create(
-	DataSourceRef vertexShader,
-	DataSourceRef fragmentShader,
-	DataSourceRef geometryShader,
-	DataSourceRef tessEvalShader,
-	DataSourceRef tessCtrlShader )
+	const DataSourceRef &vertTextDataSource,
+	const DataSourceRef &fragTextDataSource,
+	const DataSourceRef &geomTextDataSource,
+	const DataSourceRef &teseTextDataSource,
+	const DataSourceRef &tescTextDataSource )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vertexShader, fragmentShader, geometryShader, tessEvalShader, tessCtrlShader );
+	return create( device, vertTextDataSource, fragTextDataSource, geomTextDataSource, teseTextDataSource, tescTextDataSource );
 }
 
 GlslProgRef GlslProg::create(
 	vk::DeviceRef device,
-	DataSourceRef vertexShader,
-	DataSourceRef fragmentShader,
-	DataSourceRef geometryShader,
-	DataSourceRef tessEvalShader,
-	DataSourceRef tessCtrlShader )
+	const DataSourceRef &vertTextDataSource,
+	const DataSourceRef &fragTextDataSource,
+	const DataSourceRef &geomTextDataSource,
+	const DataSourceRef &teseTextDataSource,
+	const DataSourceRef &tescTextDataSource )
 {
-	std::string vertexSource;
-	std::string fragmentSource;
-	std::string geometrySource;
-	std::string tessEvalSource;
-	std::string tessCtrlSource;
+	std::string vertText;
+	std::string fragText;
+	std::string geomText;
+	std::string teseText;
+	std::string tescText;
 
-	loadShaderSource( vertexShader, vertexSource );
-	loadShaderSource( fragmentShader, fragmentSource );
-	loadShaderSource( geometryShader, geometrySource );
-	loadShaderSource( tessEvalShader, tessEvalSource );
-	loadShaderSource( tessCtrlShader, tessCtrlSource );
+	loadShaderText( vertTextDataSource, vertText );
+	loadShaderText( fragTextDataSource, fragText );
+	loadShaderText( geomTextDataSource, geomText );
+	loadShaderText( teseTextDataSource, teseText );
+	loadShaderText( tescTextDataSource, tescText );
 
-	return create( device, vertexSource, fragmentSource, geometrySource, tessEvalSource, tessCtrlSource );
+	return create( device, vertText, fragText, geomText, teseText, tescText );
 }
 
 GlslProgRef GlslProg::create(
-	const std::string &vertexShader,
-	const std::string &fragmentShader,
-	const std::string &geometryShader,
-	const std::string &tessEvalShader,
-	const std::string &tessCtrlShader )
+	const std::string &vertText,
+	const std::string &fragText,
+	const std::string &geomText,
+	const std::string &teseText,
+	const std::string &tescText )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vertexShader, fragmentShader, geometryShader, tessEvalShader, tessCtrlShader );
+	return create( device, vertText, fragText, geomText, teseText, tescText );
 }
 
 GlslProgRef GlslProg::create(
 	vk::DeviceRef	   device,
-	const std::string &vertexShader,
-	const std::string &fragmentShader,
-	const std::string &geometryShader,
-	const std::string &tessEvalShader,
-	const std::string &tessCtrlShader )
+	const std::string &vertText,
+	const std::string &fragText,
+	const std::string &geomText,
+	const std::string &teseText,
+	const std::string &tescText )
 {
-	vk::ShaderModuleRef vs = compileShader( device, vertexShader, VK_SHADER_STAGE_VERTEX_BIT );
-	vk::ShaderModuleRef ps = compileShader( device, fragmentShader, VK_SHADER_STAGE_FRAGMENT_BIT );
-	vk::ShaderModuleRef gs = compileShader( device, geometryShader, VK_SHADER_STAGE_GEOMETRY_BIT );
-	vk::ShaderModuleRef ds = compileShader( device, tessEvalShader, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
-	vk::ShaderModuleRef hs = compileShader( device, tessCtrlShader, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
+	vk::ShaderModuleRef vs = compileShader( device, vertText, VK_SHADER_STAGE_VERTEX_BIT );
+	vk::ShaderModuleRef ps = compileShader( device, fragText, VK_SHADER_STAGE_FRAGMENT_BIT );
+	vk::ShaderModuleRef gs = compileShader( device, geomText, VK_SHADER_STAGE_GEOMETRY_BIT );
+	vk::ShaderModuleRef ds = compileShader( device, teseText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
+	vk::ShaderModuleRef hs = compileShader( device, tescText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
 
 	vk::ShaderProg::Format format = ShaderProg::Format();
 	format.vertex( vs );
@@ -993,63 +993,63 @@ vk::ShaderModuleRef GlslProg::compileShader( vk::DeviceRef device, const std::st
 // HlslProg
 
 HlslProgRef HlslProg::create(
-	DataSourceRef vs,
-	DataSourceRef ps,
-	DataSourceRef gs,
-	DataSourceRef ds,
-	DataSourceRef hs )
+	const DataSourceRef &vsTextDataSource,
+	const DataSourceRef &psTextDataSource,
+	const DataSourceRef &gsTextDataSource,
+	const DataSourceRef &dsTextDataSource,
+	const DataSourceRef &hsTextDataSource )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vs, ps, gs, ds, hs );
+	return create( device, vsTextDataSource, psTextDataSource, gsTextDataSource, dsTextDataSource, hsTextDataSource );
 }
 
 HlslProgRef HlslProg::create(
 	vk::DeviceRef device,
-	DataSourceRef vs,
-	DataSourceRef ps,
-	DataSourceRef gs,
-	DataSourceRef ds,
-	DataSourceRef hs )
+	const DataSourceRef &vsTextDataSource,
+	const DataSourceRef &psTextDataSource,
+	const DataSourceRef &gsTextDataSource,
+	const DataSourceRef &dsTextDataSource,
+	const DataSourceRef &hsTextDataSource )
 {
-	std::string vsSource;
-	std::string psSource;
-	std::string gsSource;
-	std::string dsSource;
-	std::string hsSource;
+	std::string vsText;
+	std::string psText;
+	std::string gsText;
+	std::string dsText;
+	std::string hsText;
 
-	loadShaderSource( vs, vsSource );
-	loadShaderSource( ps, psSource );
-	loadShaderSource( gs, gsSource );
-	loadShaderSource( ds, dsSource );
-	loadShaderSource( hs, hsSource );
+	loadShaderText( vsTextDataSource, vsText );
+	loadShaderText( psTextDataSource, psText );
+	loadShaderText( gsTextDataSource, gsText );
+	loadShaderText( dsTextDataSource, dsText );
+	loadShaderText( hsTextDataSource, hsText );
 
-	return create( device, vsSource, psSource, gsSource, dsSource, hsSource );
+	return create( device, vsText, psText, gsText, dsText, hsText );
 }
 
 HlslProgRef HlslProg::create(
-	const std::string &vsSource,
-	const std::string &psSource,
-	const std::string &gsSource,
-	const std::string &dsSource,
-	const std::string &hsSource )
+	const std::string &vsText,
+	const std::string &psText,
+	const std::string &gsText,
+	const std::string &dsText,
+	const std::string &hsText )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vsSource, psSource, gsSource, dsSource, hsSource );
+	return create( device, vsText, psText, gsText, dsText, hsText );
 }
 
 HlslProgRef HlslProg::create(
 	vk::DeviceRef	   device,
-	const std::string &vsSource,
-	const std::string &psSource,
-	const std::string &gsSource,
-	const std::string &dsSource,
-	const std::string &hsSource )
+	const std::string &vsText,
+	const std::string &psText,
+	const std::string &gsText,
+	const std::string &dsText,
+	const std::string &hsText )
 {
-	vk::ShaderModuleRef vs = compileShader( device, vsSource, VK_SHADER_STAGE_VERTEX_BIT );
-	vk::ShaderModuleRef ps = compileShader( device, psSource, VK_SHADER_STAGE_FRAGMENT_BIT );
-	vk::ShaderModuleRef gs = compileShader( device, gsSource, VK_SHADER_STAGE_GEOMETRY_BIT );
-	vk::ShaderModuleRef ds = compileShader( device, dsSource, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
-	vk::ShaderModuleRef hs = compileShader( device, hsSource, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
+	vk::ShaderModuleRef vs = compileShader( device, vsText, VK_SHADER_STAGE_VERTEX_BIT );
+	vk::ShaderModuleRef ps = compileShader( device, psText, VK_SHADER_STAGE_FRAGMENT_BIT );
+	vk::ShaderModuleRef gs = compileShader( device, gsText, VK_SHADER_STAGE_GEOMETRY_BIT );
+	vk::ShaderModuleRef ds = compileShader( device, dsText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
+	vk::ShaderModuleRef hs = compileShader( device, hsText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
 
 	vk::ShaderProg::Format format = ShaderProg::Format();
 	format.vertex( vs );
@@ -1072,12 +1072,12 @@ HlslProg::~HlslProg()
 
 vk::ShaderModuleRef HlslProg::compileShader(
 	vk::DeviceRef			  device,
-	const std::string &		  sourceText,
+	const std::string &		  text,
 	VkShaderStageFlagBits	  shaderStage,
 	const std::string &		  entryPointName,
 	vk::HlslProg::ShaderModel shaderModel )
 {
-	if ( sourceText.empty() ) {
+	if ( text.empty() ) {
 		return vk::ShaderModuleRef();
 	}
 
@@ -1131,8 +1131,8 @@ vk::ShaderModuleRef HlslProg::compileShader(
 
 	ComPtr<IDxcBlobEncoding> source;
 	hr = library->CreateBlobWithEncodingFromPinned(
-		(LPVOID)sourceText.c_str(),
-		static_cast<UINT32>( sourceText.length() ),
+		(LPVOID)text.c_str(),
+		static_cast<UINT32>( text.length() ),
 		CP_ACP,
 		&source );
 	if ( FAILED( hr ) ) {
