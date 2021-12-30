@@ -516,79 +516,79 @@ vk::ShaderProgRef ShaderProg::create( vk::DeviceRef device, const Format &format
 }
 
 ShaderProgRef ShaderProg::create(
-	vk::ShaderModuleRef vertexShader,
-	vk::ShaderModuleRef fragmentShader,
-	vk::ShaderModuleRef geometryShader,
-	vk::ShaderModuleRef tessEvalShader,
-	vk::ShaderModuleRef tessCtrlShader )
+	vk::ShaderModuleRef vertShader,
+	vk::ShaderModuleRef fragShader,
+	vk::ShaderModuleRef geomShader,
+	vk::ShaderModuleRef teseShader,
+	vk::ShaderModuleRef tescShader )
 {
-	Format format = Format().vertex( vertexShader );
-	if ( fragmentShader ) {
-		format.fragment( fragmentShader );
+	Format format = Format().vertex( vertShader );
+	if ( fragShader ) {
+		format.fragment( fragShader );
 	}
-	if ( geometryShader ) {
-		format.geometry( geometryShader );
+	if ( geomShader ) {
+		format.geometry( geomShader );
 	}
-	if ( tessEvalShader ) {
-		format.tessellationEval( tessEvalShader );
+	if ( teseShader ) {
+		format.tessellationEval( teseShader );
 	}
-	if ( tessCtrlShader ) {
-		format.tessellationCtrl( tessCtrlShader );
+	if ( tescShader ) {
+		format.tessellationCtrl( tescShader );
 	}
 
-	return ShaderProg::create( vertexShader->getDevice(), format );
+	return ShaderProg::create( vertShader->getDevice(), format );
 }
 
 ShaderProgRef ShaderProg::create(
 	vk::DeviceRef device,
-	DataSourceRef vertexDataSource,
-	DataSourceRef fragmentDataSource,
-	DataSourceRef geometryDataSource,
-	DataSourceRef tessEvalDataSource,
-	DataSourceRef tessCtrlDataSource )
+	DataSourceRef vertDataSource,
+	DataSourceRef fragDataSource,
+	DataSourceRef geomDataSource,
+	DataSourceRef teseDataSource,
+	DataSourceRef tescDataSource )
 {
-	Format format = Format().vertex( vk::ShaderModule::create( vertexDataSource, device ) );
-	if ( fragmentDataSource ) {
-		format.fragment( vk::ShaderModule::create( fragmentDataSource, device ) );
+	Format format = Format().vertex( vk::ShaderModule::create( vertDataSource, device ) );
+	if ( fragDataSource ) {
+		format.fragment( vk::ShaderModule::create( fragDataSource, device ) );
 	}
-	if ( geometryDataSource ) {
-		format.geometry( vk::ShaderModule::create( geometryDataSource, device ) );
+	if ( geomDataSource ) {
+		format.geometry( vk::ShaderModule::create( geomDataSource, device ) );
 	}
-	if ( tessEvalDataSource ) {
-		format.tessellationEval( vk::ShaderModule::create( tessEvalDataSource, device ) );
+	if ( teseDataSource ) {
+		format.tessellationEval( vk::ShaderModule::create( teseDataSource, device ) );
 	}
-	if ( tessCtrlDataSource ) {
-		format.tessellationCtrl( vk::ShaderModule::create( tessCtrlDataSource, device ) );
+	if ( tescDataSource ) {
+		format.tessellationCtrl( vk::ShaderModule::create( tescDataSource, device ) );
 	}
 
 	return ShaderProg::create( device, format );
 }
 
 ShaderProg::ShaderProg( vk::DeviceRef device, const Format &format )
-	: mVS( format.mVertexShader ),
-	  mPS( format.mPixelShader ),
-	  mGS( format.mGeometryShader ),
-	  mHS( format.mHullShader ),
-	  mDS( format.mDomainShader ),
-	  mCS( format.mComputeShader )
+	: mVS( format.mVSModule ),
+	  mPS( format.mPSModule ),
+	  mGS( format.mGSModule ),
+	  mHS( format.mHSModule ),
+	  mDS( format.mDSModule ),
+	  mCS( format.mCSModule )
 {
-	if ( !mVS && format.mVertexDataSource ) {
-		mVS = vk::ShaderModule::create( format.mVertexDataSource, device );
+	if ( !mVS && format.mVSDataSource ) {
+		mVS = vk::ShaderModule::create( format.mVSDataSource, device );
 	}
-	if ( !mPS && format.mPixelDataSource ) {
-		mPS = vk::ShaderModule::create( format.mPixelDataSource, device );
+	if ( !mPS && format.mPSDataSource ) {
+		mPS = vk::ShaderModule::create( format.mPSDataSource, device );
 	}
-	if ( !mGS && format.mGeometryDataSource ) {
-		mGS = vk::ShaderModule::create( format.mGeometryDataSource, device );
+	if ( !mGS && format.mGSDataSource ) {
+		mGS = vk::ShaderModule::create( format.mGSDataSource, device );
 	}
-	if ( !mHS && format.mHullDataSource ) {
-		mHS = vk::ShaderModule::create( format.mHullDataSource, device );
+	if ( !mHS && format.mHSDataSource ) {
+		mHS = vk::ShaderModule::create( format.mHSDataSource, device );
 	}
-	if ( !mDS && format.mDomainDataSource ) {
-		mDS = vk::ShaderModule::create( format.mDomainDataSource, device );
+	if ( !mDS && format.mDSDataSource ) {
+		mDS = vk::ShaderModule::create( format.mDSDataSource, device );
 	}
-	if ( !mCS && format.mComputeDataSource ) {
-		mCS = vk::ShaderModule::create( format.mComputeDataSource, device );
+	if ( !mCS && format.mCSDataSource ) {
+		mCS = vk::ShaderModule::create( format.mCSDataSource, device );
 	}
 
 	parseDscriptorBindings( mVS.get() );

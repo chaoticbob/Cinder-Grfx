@@ -74,32 +74,32 @@ public:
 		Format() {}
 
 		// clang-format off
-		Format &vertex( vk::ShaderModuleRef shader ) { mVertexShader = shader; return *this; }
-		Format &vertex( DataSourceRef dataSource ) { mVertexDataSource = dataSource; return *this; }
+		Format &vertex( vk::ShaderModuleRef module ) { mVSModule = module; return *this; }
+		Format &vertex( DataSourceRef dataSource ) { mVSDataSource = dataSource; return *this; }
 
-		Format &fragment( vk::ShaderModuleRef shader ) { mPixelShader = shader; return *this; }
-		Format &fragment( DataSourceRef dataSource ) { mVertexDataSource = dataSource; return *this; }
+		Format &fragment( vk::ShaderModuleRef module ) { mPSModule = module; return *this; }
+		Format &fragment( DataSourceRef dataSource ) { mPSDataSource = dataSource; return *this; }
 
-		Format &pixel( vk::ShaderModuleRef shader ) { fragment(shader); return *this;}
-		Format &pixel( DataSourceRef dataSource ) { mVertexDataSource = dataSource; return *this; }
+		Format &pixel( vk::ShaderModuleRef module ) { fragment(module); return *this;}
+		Format &pixel( DataSourceRef dataSource ) { fragment(dataSource); return *this; }
 
-		Format &geometry( vk::ShaderModuleRef shader ) { mGeometryShader = shader; return *this; }
-		Format &geometry( DataSourceRef dataSource ) { mVertexDataSource = dataSource; return *this; }
+		Format &geometry( vk::ShaderModuleRef module ) { mGSModule = module; return *this; }
+		Format &geometry( DataSourceRef dataSource ) { mGSDataSource = dataSource; return *this; }
 
-		Format &tessellationCtrl( vk::ShaderModuleRef shader ) { mHullShader = shader; return *this; }
-		Format &tessellationCtrl( DataSourceRef dataSource ) { mVertexDataSource = dataSource; return *this; }
+		Format &tessellationCtrl( vk::ShaderModuleRef module ) { mHSModule = module; return *this; }
+		Format &tessellationCtrl( DataSourceRef dataSource ) { mHSDataSource = dataSource; return *this; }
 
-		Format &hull( vk::ShaderModuleRef shader ) { tessellationCtrl(shader); return *this;}
+		Format &hull( vk::ShaderModuleRef module ) { tessellationCtrl(module); return *this;}
 		Format &hull( DataSourceRef dataSource ) { tessellationCtrl(dataSource); return *this; }
 
-		Format &tessellationEval( vk::ShaderModuleRef shader ) { mDomainShader = shader; return *this; }
-		Format &tessellationEval( DataSourceRef dataSource ) { mVertexDataSource = dataSource; return *this; }
+		Format &tessellationEval( vk::ShaderModuleRef module ) { mDSModule = module; return *this; }
+		Format &tessellationEval( DataSourceRef dataSource ) { mDSDataSource = dataSource; return *this; }
 
-		Format &domain( vk::ShaderModuleRef shader ) { tessellationEval(shader); return *this;}
+		Format &domain( vk::ShaderModuleRef module ) { tessellationEval(module); return *this;}
 		Format &domain( DataSourceRef dataSource ) { tessellationEval(dataSource); return *this; }
 
-		Format &compute( vk::ShaderModuleRef shader ) { mComputeShader = shader; return *this; }
-		Format &compute( DataSourceRef dataSource ) { mVertexDataSource = dataSource; return *this; }
+		Format &compute( vk::ShaderModuleRef module ) { mCSModule = module; return *this; }
+		Format &compute( DataSourceRef dataSource ) { mCSDataSource = dataSource; return *this; }
 		// clang-format on
 
 	private:
@@ -107,28 +107,28 @@ public:
 
 	private:
 		// Vertex
-		vk::ShaderModuleRef mVertexShader;
-		DataSourceRef		mVertexDataSource;
+		vk::ShaderModuleRef mVSModule;
+		DataSourceRef		mVSDataSource;
 
 		// Pixel / Fragment
-		vk::ShaderModuleRef mPixelShader;
-		DataSourceRef		mPixelDataSource;
+		vk::ShaderModuleRef mPSModule;
+		DataSourceRef		mPSDataSource;
 
 		// Geometry
-		vk::ShaderModuleRef mGeometryShader;
-		DataSourceRef		mGeometryDataSource;
+		vk::ShaderModuleRef mGSModule;
+		DataSourceRef		mGSDataSource;
 
 		// Hull / Tessellation Control
-		vk::ShaderModuleRef mHullShader;
-		DataSourceRef		mHullDataSource;
+		vk::ShaderModuleRef mHSModule;
+		DataSourceRef		mHSDataSource;
 
 		// Domain / Tessellation Evaluate
-		vk::ShaderModuleRef mDomainShader;
-		DataSourceRef		mDomainDataSource;
+		vk::ShaderModuleRef mDSModule;
+		DataSourceRef		mDSDataSource;
 
 		// Compute
-		vk::ShaderModuleRef mComputeShader;
-		DataSourceRef		mComputeDataSource;
+		vk::ShaderModuleRef mCSModule;
+		DataSourceRef		mCSDataSource;
 
 		friend class ShaderProg;
 	};
