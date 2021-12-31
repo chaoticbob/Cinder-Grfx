@@ -3,3 +3,4 @@ set( CMAKE_VERBOSE_MAKEFILE ON )
 
 add_subdirectory(_grfx/Cube/proj/cmake)
 add_subdirectory(_grfx/CubeHLSL/proj/cmake)
+add_subdirectory(_grfx/CubeMapping/proj/cmake)
