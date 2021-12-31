@@ -18,7 +18,6 @@ in vec3 ciNormal;
 
 out highp vec2	TexCoord;
 out lowp  vec4	Color;
-//out highp vec4	Color;
 out highp vec3	Normal;
 
 void main( void )
