@@ -16,6 +16,8 @@
 using Microsoft::WRL::ComPtr;
 #endif
 
+#include <regex>
+
 namespace cinder::vk {
 
 const uint32_t SPIRV_STARTING_WORD_INDEX = 5;
@@ -745,10 +747,10 @@ static void removeRelaxedPrecision(
 	// Remove in backwards order
 	const size_t n = removeInfo.size();
 	for ( size_t i = 0; i < n; ++i ) {
-		const size_t j	 = n - i - 1;
-		auto & info	 = removeInfo[j];
-		auto   first = spirv->begin() + ( info.first * kSpirvWordSize );
-		auto   last	 = first + ( info.second * kSpirvWordSize );
+		const size_t j	   = n - i - 1;
+		auto &		 info  = removeInfo[j];
+		auto		 first = spirv->begin() + ( info.first * kSpirvWordSize );
+		auto		 last  = first + ( info.second * kSpirvWordSize );
 		spirv->erase( first, last );
 	}
 }
@@ -1153,14 +1155,22 @@ private:
 
 std::unique_ptr<Glslang> Glslang::sInstance;
 
+static void replaceVersion( std::string &text )
+{
+	std::regex expr( "#version\\s+\\d+(\\s*es)?" );
+	text = std::regex_replace( text, expr, "#version 460" );
+}
+
 std::vector<char> GlslProg::compileShader(
 	vk::DeviceRef		  device,
-	const std::string &	  source,
+	std::string			  text,
 	VkShaderStageFlagBits stage )
 {
-	if ( source.empty() ) {
+	if ( text.empty() ) {
 		return std::vector<char>();
 	}
+
+	replaceVersion( text );
 
 	const glslang_stage_t			kInvalidStage		 = static_cast<glslang_stage_t>( ~0 );
 	glslang_target_client_version_t kInvalidClientVerson = static_cast<glslang_target_client_version_t>( ~0 );
@@ -1206,7 +1216,7 @@ std::vector<char> GlslProg::compileShader(
 	input.client_version					= clientVersion;
 	input.target_language					= GLSLANG_TARGET_SPV;
 	input.target_language_version			= GLSLANG_TARGET_SPV_1_3;
-	input.code								= source.c_str();
+	input.code								= text.c_str();
 	input.default_version					= 100;
 	input.default_profile					= GLSLANG_NO_PROFILE;
 	input.force_default_version_and_profile = false;

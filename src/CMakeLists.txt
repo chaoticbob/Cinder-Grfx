@@ -180,6 +180,9 @@ source_group("Source Files\\cinder\\grfx" FILES ${GRFX_SRC_FILES})
 source_group("Header Files\\cinder\\vk"   FILES ${VK_HDR_FILES})
 source_group("Source Files\\cinder\\vk"   FILES ${VK_SRC_FILES})
     
+set_target_properties( ${TARGET_NAME} PROPERTIES FOLDER "cinder-grfx" )
+
+
 target_include_directories(
     ${TARGET_NAME}
     PRIVATE ${CINDER_GRFX_PATH}/third_party/xxHash

@@ -318,7 +318,7 @@ private:
 
 	static std::vector<char> compileShader(
 		vk::DeviceRef		  device,
-		const std::string &	  source,
+		std::string			  text,
 		VkShaderStageFlagBits stage );
 
 private:

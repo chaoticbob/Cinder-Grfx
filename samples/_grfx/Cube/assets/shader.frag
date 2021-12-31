@@ -4,7 +4,7 @@ Compile:
   glslangValidator.exe --target-env vulkan1.1 -R --amb --aml -S frag -o shader.frag.spv shader.frag
 
 */
-#version 430
+#version 150
 
 uniform sampler2D uTex0;
 
