@@ -1,7 +1,7 @@
 /* 
 
 Compile:
-  glslangValidator.exe --target-env vulkan1.1 --hlsl-offsets --amb --aml -S vert -o shader.vert.spv shader.vert
+  glslangValidator.exe --target-env vulkan1.1 -R --hlsl-offsets --amb --aml -S vert -o shader.vert.spv shader.vert
 
 */
 #version 430
@@ -17,8 +17,8 @@ in vec3 ciNormal;
 //in vec4 ciColor;
 
 out highp vec2	TexCoord;
-//out lowp  vec4	Color;
-out highp vec4	Color;
+out lowp  vec4	Color;
+//out highp vec4	Color;
 out highp vec3	Normal;
 
 void main( void )

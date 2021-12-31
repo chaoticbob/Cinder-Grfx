@@ -10,6 +10,22 @@ class Device;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Objects
 
+struct CI_API SpirvBytecode
+{
+	size_t		sizeInBytes;
+	const void *code;
+
+	const char *begin() const
+	{
+		return static_cast<const char *>( code );
+	}
+
+	const char* end() const
+	{
+		return begin() + sizeInBytes;
+	}
+};
+
 struct CI_API InterfaceVariable
 {
 	InterfaceVariable() {}

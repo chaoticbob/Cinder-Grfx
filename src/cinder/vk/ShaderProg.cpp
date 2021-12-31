@@ -77,7 +77,7 @@ static std::map<std::string, geom::Attrib> sDefaultAttribNameToSemanticMap = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Helper functions
 
-static void loadShaderText( DataSourceRef dataSource, std::string &sourceTarget )
+static void loadShaderText( const DataSourceRef &dataSource, std::string &sourceTarget )
 {
 	if ( !dataSource ) {
 		return;
@@ -97,6 +97,28 @@ static void loadShaderText( DataSourceRef dataSource, std::string &sourceTarget 
 	const char *start = static_cast<const char *>( buffer->getData() );
 	const char *end	  = start + buffer->getSize();
 	sourceTarget	  = std::string( start, end );
+}
+
+static void loadShaderSpirv( const DataSourceRef &dataSource, std::vector<char> &spirvTarget )
+{
+	if ( !dataSource ) {
+		return;
+	}
+
+	ci::BufferRef buffer;
+	if ( dataSource->isFilePath() ) {
+		buffer = loadFile( dataSource->getFilePath() )->getBuffer();
+	}
+	else if ( dataSource->isUrl() ) {
+		buffer = loadUrl( dataSource->getUrl() )->getBuffer();
+	}
+	else {
+		buffer = dataSource->getBuffer();
+	}
+
+	const char *start = static_cast<const char *>( buffer->getData() );
+	const char *end	  = start + buffer->getSize();
+	spirvTarget		  = std::vector<char>( start, end );
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -510,104 +532,320 @@ const std::vector<vk::InterfaceVariable> &ShaderModule::getVertexAttributes() co
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // ShaderProg
 
-vk::ShaderProgRef ShaderProg::create( vk::DeviceRef device, const Format &format )
+ShaderProgRef ShaderProg::create(
+	vk::ShaderModuleRef	  vertOrCompModule,
+	VkShaderStageFlagBits shaderStage )
 {
-	return ShaderProgRef( new ShaderProg( device, format ) );
+	if ( ( shaderStage != VK_SHADER_STAGE_VERTEX_BIT ) || ( shaderStage != VK_SHADER_STAGE_COMPUTE_BIT ) ) {
+		throw VulkanExc( "invalid shader stage" );
+	}
+
+	if ( shaderStage == VK_SHADER_STAGE_VERTEX_BIT ) {
+		return vk::ShaderProgRef( new vk::ShaderProg(
+			vertOrCompModule,
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr,
+			nullptr ) );
+	}
+
+	return vk::ShaderProgRef( new vk::ShaderProg(
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		vertOrCompModule ) );
 }
 
 ShaderProgRef ShaderProg::create(
-	vk::ShaderModuleRef vertShader,
-	vk::ShaderModuleRef fragShader,
-	vk::ShaderModuleRef geomShader,
-	vk::ShaderModuleRef teseShader,
-	vk::ShaderModuleRef tescShader )
+	vk::ShaderModuleRef vertModule,
+	vk::ShaderModuleRef fragModule,
+	vk::ShaderModuleRef geomModule,
+	vk::ShaderModuleRef teseModule,
+	vk::ShaderModuleRef tescModule )
 {
-	Format format = Format().vertex( vertShader );
-	if ( fragShader ) {
-		format.fragment( fragShader );
-	}
-	if ( geomShader ) {
-		format.geometry( geomShader );
-	}
-	if ( teseShader ) {
-		format.tessellationEval( teseShader );
-	}
-	if ( tescShader ) {
-		format.tessellationCtrl( tescShader );
-	}
-
-	return ShaderProg::create( vertShader->getDevice(), format );
+	return vk::ShaderProgRef( new vk::ShaderProg(
+		vertModule,
+		fragModule,
+		geomModule,
+		teseModule,
+		tescModule,
+		nullptr ) );
 }
 
-ShaderProgRef ShaderProg::create(
-	vk::DeviceRef device,
-	DataSourceRef vertDataSource,
-	DataSourceRef fragDataSource,
-	DataSourceRef geomDataSource,
-	DataSourceRef teseDataSource,
-	DataSourceRef tescDataSource )
+vk::ShaderProgRef ShaderProg::create(
+	vk::DeviceRef		  device,
+	const DataSourceRef & vertOrCompSpirvDataSource,
+	VkShaderStageFlagBits shaderStage )
 {
-	Format format = Format().vertex( vk::ShaderModule::create( vertDataSource, device ) );
-	if ( fragDataSource ) {
-		format.fragment( vk::ShaderModule::create( fragDataSource, device ) );
-	}
-	if ( geomDataSource ) {
-		format.geometry( vk::ShaderModule::create( geomDataSource, device ) );
-	}
-	if ( teseDataSource ) {
-		format.tessellationEval( vk::ShaderModule::create( teseDataSource, device ) );
-	}
-	if ( tescDataSource ) {
-		format.tessellationCtrl( vk::ShaderModule::create( tescDataSource, device ) );
-	}
+	std::vector<char> spirv;
+	loadShaderSpirv( vertOrCompSpirvDataSource, spirv );
 
-	return ShaderProg::create( device, format );
+	return vk::ShaderProg::create( device, vk::SpirvBytecode{ spirv.size(), spirv.data() }, shaderStage );
 }
 
-ShaderProg::ShaderProg( vk::DeviceRef device, const Format &format )
-	: mVS( format.mVSModule ),
-	  mPS( format.mPSModule ),
-	  mGS( format.mGSModule ),
-	  mHS( format.mHSModule ),
-	  mDS( format.mDSModule ),
-	  mCS( format.mCSModule )
+vk::ShaderProgRef ShaderProg::create(
+	vk::DeviceRef		 device,
+	const DataSourceRef &vertSpirvDataSource,
+	const DataSourceRef &fragSpirvDataSource,
+	const DataSourceRef &geomSpirvDataSource,
+	const DataSourceRef &teseSpirvDataSource,
+	const DataSourceRef &tescSpirvDataSource )
 {
-	if ( !mVS && format.mVSDataSource ) {
-		mVS = vk::ShaderModule::create( format.mVSDataSource, device );
-	}
-	if ( !mPS && format.mPSDataSource ) {
-		mPS = vk::ShaderModule::create( format.mPSDataSource, device );
-	}
-	if ( !mGS && format.mGSDataSource ) {
-		mGS = vk::ShaderModule::create( format.mGSDataSource, device );
-	}
-	if ( !mHS && format.mHSDataSource ) {
-		mHS = vk::ShaderModule::create( format.mHSDataSource, device );
-	}
-	if ( !mDS && format.mDSDataSource ) {
-		mDS = vk::ShaderModule::create( format.mDSDataSource, device );
-	}
-	if ( !mCS && format.mCSDataSource ) {
-		mCS = vk::ShaderModule::create( format.mCSDataSource, device );
+	std::vector<char> vertSpirv;
+	std::vector<char> fragSpirv;
+	std::vector<char> geomSpirv;
+	std::vector<char> teseSpirv;
+	std::vector<char> tescSpirv;
+	loadShaderSpirv( vertSpirvDataSource, vertSpirv );
+	loadShaderSpirv( fragSpirvDataSource, fragSpirv );
+	loadShaderSpirv( geomSpirvDataSource, geomSpirv );
+	loadShaderSpirv( teseSpirvDataSource, teseSpirv );
+	loadShaderSpirv( tescSpirvDataSource, tescSpirv );
+
+	return vk::ShaderProg::create(
+		device,
+		vk::SpirvBytecode{ vertSpirv.size(), vertSpirv.data() },
+		vk::SpirvBytecode{ fragSpirv.size(), fragSpirv.data() },
+		vk::SpirvBytecode{ geomSpirv.size(), geomSpirv.data() },
+		vk::SpirvBytecode{ teseSpirv.size(), teseSpirv.data() },
+		vk::SpirvBytecode{ tescSpirv.size(), tescSpirv.data() } );
+}
+
+vk::ShaderProgRef ShaderProg::create(
+	vk::DeviceRef			 device,
+	const vk::SpirvBytecode &vsOrCsSpirv,
+	VkShaderStageFlagBits	 shaderStage )
+{
+	auto spirvStore = std::vector<char>( vsOrCsSpirv.begin(), vsOrCsSpirv.end() );
+	return vk::ShaderProgRef( new vk::ShaderProg( device, std::move( spirvStore ), shaderStage ) );
+}
+
+vk::ShaderProgRef ShaderProg::create(
+	vk::DeviceRef			 device,
+	const vk::SpirvBytecode &vsSpirv,
+	const vk::SpirvBytecode &psSpirv,
+	const vk::SpirvBytecode &gsSpirv,
+	const vk::SpirvBytecode &dsSpirv,
+	const vk::SpirvBytecode &hsSpirv )
+{
+	auto vsSpirvStore = std::vector<char>( vsSpirv.begin(), vsSpirv.end() );
+	auto psSpirvStore = std::vector<char>( psSpirv.begin(), psSpirv.end() );
+	auto gsSpirvStore = std::vector<char>( gsSpirv.begin(), gsSpirv.end() );
+	auto dsSpirvStore = std::vector<char>( dsSpirv.begin(), dsSpirv.end() );
+	auto hsSpirvStore = std::vector<char>( hsSpirv.begin(), hsSpirv.end() );
+
+	return vk::ShaderProgRef( new vk::ShaderProg(
+		device,
+		std::move( vsSpirvStore ),
+		std::move( psSpirvStore ),
+		std::move( gsSpirvStore ),
+		std::move( dsSpirvStore ),
+		std::move( hsSpirvStore ) ) );
+}
+
+ShaderProg::ShaderProg(
+	vk::ShaderModuleRef vs,
+	vk::ShaderModuleRef ps,
+	vk::ShaderModuleRef gs,
+	vk::ShaderModuleRef ds,
+	vk::ShaderModuleRef hs,
+	vk::ShaderModuleRef cs )
+	: mVs( vs ),
+	  mPs( ps ),
+	  mGs( gs ),
+	  mDs( ds ),
+	  mHs( hs ),
+	  mCs( cs )
+{
+	parseModules();
+}
+
+ShaderProg::ShaderProg(
+	vk::DeviceRef		  device,
+	std::vector<char> &&  vsOrCsSpirv,
+	VkShaderStageFlagBits shaderStage )
+{
+}
+
+static std::vector<SpvReflectInterfaceVariable *> getInputVariables(
+	spv_reflect::ShaderModule &reflection )
+{
+	uint32_t		 count	= 0;
+	SpvReflectResult spvres = reflection.EnumerateInputVariables( &count, nullptr );
+	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "interface variable alignment failed: couldn't enumerate input variable count" );
 	}
 
-	parseDscriptorBindings( mVS.get() );
-	parseDscriptorBindings( mPS.get() );
-	parseDscriptorBindings( mGS.get() );
-	parseDscriptorBindings( mHS.get() );
-	parseDscriptorBindings( mDS.get() );
-	parseDscriptorBindings( mCS.get() );
+	std::vector<SpvReflectInterfaceVariable *> vars( count );
+	spvres = reflection.EnumerateInputVariables( &count, dataPtr( vars ) );
+	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "interface variable alignment failed: couldn't enumerate input variables" );
+	}
 
-	parseUniformBlocks( mVS.get() );
-	parseUniformBlocks( mPS.get() );
-	parseUniformBlocks( mGS.get() );
-	parseUniformBlocks( mHS.get() );
-	parseUniformBlocks( mDS.get() );
-	parseUniformBlocks( mCS.get() );
+	return vars;
+}
+
+static std::vector<SpvReflectInterfaceVariable *> getOutputVariables(
+	spv_reflect::ShaderModule &reflection )
+{
+	uint32_t		 count	= 0;
+	SpvReflectResult spvres = reflection.EnumerateOutputVariables( &count, nullptr );
+	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "interface variable alignment failed: couldn't enumerate output variable count" );
+	}
+
+	std::vector<SpvReflectInterfaceVariable *> vars( count );
+	spvres = reflection.EnumerateOutputVariables( &count, dataPtr( vars ) );
+	if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "interface variable alignment failed: couldn't enumerate output variables" );
+	}
+
+	return vars;
+}
+
+static void alignInterfaceVariables(
+	std::vector<char> *outStage,
+	std::vector<char> *inStage )
+{
+	spv_reflect::ShaderModule outReflection = spv_reflect::ShaderModule( outStage->size(), outStage->data() );
+	spv_reflect::ShaderModule inReflection	= spv_reflect::ShaderModule( inStage->size(), inStage->data() );
+
+	if ( outReflection.GetResult() != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "interface variable alignment failed: reflection failed for out stage" );
+	}
+
+	if ( inReflection.GetResult() != SPV_REFLECT_RESULT_SUCCESS ) {
+		throw VulkanExc( "interface variable alignment failed: reflection failed for out stage" );
+	}
+
+	if ( outReflection.GetShaderModule().source_language != inReflection.GetShaderModule().source_language ) {
+		throw VulkanExc( "interface variable alignment failed: in and out stage smust have same source language" );
+	}
+
+	auto outVars = getOutputVariables( outReflection );
+	auto inVars	 = getInputVariables( inReflection );
+
+	bool changed = false;
+	for ( size_t i = 0; i < inVars.size(); ++i ) {
+		auto &inVar = inVars[i];
+		// Skip built-in variables
+		if ( inVar->decoration_flags & SPV_REFLECT_DECORATION_BUILT_IN ) {
+			continue;
+		}
+
+		std::string inSemantic = ( inVar->semantic != nullptr ) ? inVar->semantic : "";
+		if ( !inSemantic.empty() ) {
+			// Use semantic to match up input/output variables
+		}
+		else {
+			// Use name to match up input/output variables
+			std::string inName = ( inVar->name != nullptr ) ? inVar->name : "";
+			if ( inName.empty() ) {
+				throw VulkanExc( "interface variable alignment failed: input variable must have name" );
+			}
+			for ( size_t j = 0; j < outVars.size(); ++j ) {
+				auto &		outVar	= outVars[j];
+				std::string outName = ( outVar->name != nullptr ) ? outVar->name : "";
+				// Skip if name doesn't match
+				if ( inName != outName ) {
+					continue;
+				}
+				// Change input location if it doesn't match output location
+				if ( inVar->location != outVar->location ) {
+					inReflection.ChangeInputVariableLocation( inVar, outVar->location );
+					changed = true;
+				}
+				// Check for precion differences
+				if (outVar->decoration_flags & SPV_REFLECT_DECORATION_RELAXED_PRECISION) {
+				}
+			}
+		}
+	}
+
+	if ( changed ) {
+		const size_t sizeInBytes = inReflection.GetCodeSize();
+		const char * pCode		 = reinterpret_cast<const char *>( inReflection.GetCode() );
+		*inStage = std::vector<char>( pCode, pCode + sizeInBytes );
+	}
+}
+
+ShaderProg::ShaderProg(
+	vk::DeviceRef		device,
+	std::vector<char> &&vsSpirv,
+	std::vector<char> &&psSpirv,
+	std::vector<char> &&gsSpirv,
+	std::vector<char> &&dsSpirv,
+	std::vector<char> &&hsSpirv )
+{
+	std::vector<std::vector<char> *> stages;
+	if ( !vsSpirv.empty() ) {
+		stages.push_back( &vsSpirv );
+	}
+	if ( !hsSpirv.empty() ) {
+		stages.push_back( &hsSpirv );
+	}
+	if ( !dsSpirv.empty() ) {
+		stages.push_back( &dsSpirv );
+	}
+	if ( !gsSpirv.empty() ) {
+		stages.push_back( &gsSpirv );
+	}
+	if ( !psSpirv.empty() ) {
+		stages.push_back( &psSpirv );
+	}
+
+	const size_t numStages = stages.size();
+	if ( numStages < 2 ) {
+		throw VulkanExc( "invalid number of stages" );
+	}
+
+	for ( size_t i = 1; i < numStages; ++i ) {
+		std::vector<char> *outStage = stages[i - 1];
+		std::vector<char> *inStage	= stages[i];
+		alignInterfaceVariables( outStage, inStage );
+	}
+
+	if ( !vsSpirv.empty() ) {
+		mVs = vk::ShaderModule::create( vsSpirv, device );
+	}
+	if ( !hsSpirv.empty() ) {
+		mHs = vk::ShaderModule::create( hsSpirv, device );
+	}
+	if ( !dsSpirv.empty() ) {
+		mDs = vk::ShaderModule::create( dsSpirv, device );
+	}
+	if ( !gsSpirv.empty() ) {
+		mGs = vk::ShaderModule::create( gsSpirv, device );
+	}
+	if ( !psSpirv.empty() ) {
+		mPs = vk::ShaderModule::create( psSpirv, device );
+	}
+
+	parseModules();
 }
 
 ShaderProg::~ShaderProg()
 {
+}
+
+void ShaderProg::parseModules()
+{
+	parseDscriptorBindings( mVs.get() );
+	parseDscriptorBindings( mPs.get() );
+	parseDscriptorBindings( mGs.get() );
+	parseDscriptorBindings( mDs.get() );
+	parseDscriptorBindings( mHs.get() );
+	parseDscriptorBindings( mCs.get() );
+
+	parseUniformBlocks( mVs.get() );
+	parseUniformBlocks( mPs.get() );
+	parseUniformBlocks( mGs.get() );
+	parseUniformBlocks( mDs.get() );
+	parseUniformBlocks( mHs.get() );
+	parseUniformBlocks( mCs.get() );
 }
 
 void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
@@ -717,13 +955,13 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 
 const std::vector<vk::InterfaceVariable> &ShaderProg::getVertexAttributes() const
 {
-	return mVS ? mVS->getVertexAttributes() : mNullVariables;
+	return mVs ? mVs->getVertexAttributes() : mNullVariables;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GlslProg
 
-GlslProgRef GlslProg::create(
+vk::GlslProgRef GlslProg::create(
 	const DataSourceRef &vertTextDataSource,
 	const DataSourceRef &fragTextDataSource,
 	const DataSourceRef &geomTextDataSource,
@@ -731,11 +969,11 @@ GlslProgRef GlslProg::create(
 	const DataSourceRef &tescTextDataSource )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vertTextDataSource, fragTextDataSource, geomTextDataSource, teseTextDataSource, tescTextDataSource );
+	return vk::GlslProg::create( device, vertTextDataSource, fragTextDataSource, geomTextDataSource, teseTextDataSource, tescTextDataSource );
 }
 
-GlslProgRef GlslProg::create(
-	vk::DeviceRef device,
+vk::GlslProgRef GlslProg::create(
+	vk::DeviceRef		 device,
 	const DataSourceRef &vertTextDataSource,
 	const DataSourceRef &fragTextDataSource,
 	const DataSourceRef &geomTextDataSource,
@@ -754,10 +992,10 @@ GlslProgRef GlslProg::create(
 	loadShaderText( teseTextDataSource, teseText );
 	loadShaderText( tescTextDataSource, tescText );
 
-	return create( device, vertText, fragText, geomText, teseText, tescText );
+	return vk::GlslProg::create( device, vertText, fragText, geomText, teseText, tescText );
 }
 
-GlslProgRef GlslProg::create(
+vk::GlslProgRef GlslProg::create(
 	const std::string &vertText,
 	const std::string &fragText,
 	const std::string &geomText,
@@ -765,10 +1003,10 @@ GlslProgRef GlslProg::create(
 	const std::string &tescText )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vertText, fragText, geomText, teseText, tescText );
+	return vk::GlslProg::create( device, vertText, fragText, geomText, teseText, tescText );
 }
 
-GlslProgRef GlslProg::create(
+vk::GlslProgRef GlslProg::create(
 	vk::DeviceRef	   device,
 	const std::string &vertText,
 	const std::string &fragText,
@@ -776,24 +1014,43 @@ GlslProgRef GlslProg::create(
 	const std::string &teseText,
 	const std::string &tescText )
 {
-	vk::ShaderModuleRef vs = compileShader( device, vertText, VK_SHADER_STAGE_VERTEX_BIT );
-	vk::ShaderModuleRef ps = compileShader( device, fragText, VK_SHADER_STAGE_FRAGMENT_BIT );
-	vk::ShaderModuleRef gs = compileShader( device, geomText, VK_SHADER_STAGE_GEOMETRY_BIT );
-	vk::ShaderModuleRef ds = compileShader( device, teseText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
-	vk::ShaderModuleRef hs = compileShader( device, tescText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
+	auto vsSpirv = compileShader( device, vertText, VK_SHADER_STAGE_VERTEX_BIT );
+	auto psSpirv = compileShader( device, fragText, VK_SHADER_STAGE_FRAGMENT_BIT );
+	auto gsSpirv = compileShader( device, geomText, VK_SHADER_STAGE_GEOMETRY_BIT );
+	auto dsSpirv = compileShader( device, teseText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
+	auto hsSpirv = compileShader( device, tescText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
 
-	vk::ShaderProg::Format format = ShaderProg::Format();
-	format.vertex( vs );
-	format.fragment( ps );
-	format.geometry( gs );
-	format.tessellationEval( ds );
-	format.tessellationCtrl( hs );
-
-	return GlslProgRef( new GlslProg( device, format ) );
+	return vk::GlslProgRef( new GlslProg(
+		device,
+		std::move( vsSpirv ),
+		std::move( psSpirv ),
+		std::move( gsSpirv ),
+		std::move( dsSpirv ),
+		std::move( hsSpirv ) ) );
 }
 
-GlslProg::GlslProg( vk::DeviceRef device, const ShaderProg::Format &format )
-	: vk::ShaderProg( device, format )
+GlslProg::GlslProg(
+	vk::DeviceRef		  device,
+	std::vector<char> &&  vsOrCsSpirv,
+	VkShaderStageFlagBits shaderStage )
+	: vk::ShaderProg( device, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
+{
+}
+
+GlslProg::GlslProg(
+	vk::DeviceRef		device,
+	std::vector<char> &&vsSpirv,
+	std::vector<char> &&psSpirv,
+	std::vector<char> &&gsSpirv,
+	std::vector<char> &&dsSpirv,
+	std::vector<char> &&hsSpirv )
+	: vk::ShaderProg(
+		  device,
+		  std::forward<std::vector<char>>( vsSpirv ),
+		  std::forward<std::vector<char>>( psSpirv ),
+		  std::forward<std::vector<char>>( gsSpirv ),
+		  std::forward<std::vector<char>>( dsSpirv ),
+		  std::forward<std::vector<char>>( hsSpirv ) )
 {
 }
 
@@ -827,10 +1084,13 @@ private:
 
 std::unique_ptr<Glslang> Glslang::sInstance;
 
-vk::ShaderModuleRef GlslProg::compileShader( vk::DeviceRef device, const std::string &source, VkShaderStageFlagBits stage )
+std::vector<char> GlslProg::compileShader(
+	vk::DeviceRef		  device,
+	const std::string &	  source,
+	VkShaderStageFlagBits stage )
 {
 	if ( source.empty() ) {
-		return vk::ShaderModuleRef();
+		return std::vector<char>();
 	}
 
 	const glslang_stage_t			kInvalidStage		 = static_cast<glslang_stage_t>( ~0 );
@@ -982,11 +1242,12 @@ vk::ShaderModuleRef GlslProg::compileShader( vk::DeviceRef device, const std::st
 	}
 	//*/
 
-	vk::ShaderModuleRef shaderModule = vk::ShaderModule::create( sizeInBytes, pSpirvCode, device );
+	//vk::ShaderModuleRef shaderModule = vk::ShaderModule::create( sizeInBytes, pSpirvCode, device );
+	auto spirv = std::vector<char>( pSpirvCode, pSpirvCode + sizeInBytes );
 
 	glslang_program_delete( program );
 
-	return shaderModule;
+	return spirv;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1000,11 +1261,11 @@ HlslProgRef HlslProg::create(
 	const DataSourceRef &hsTextDataSource )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vsTextDataSource, psTextDataSource, gsTextDataSource, dsTextDataSource, hsTextDataSource );
+	return vk::HlslProg::create( device, vsTextDataSource, psTextDataSource, gsTextDataSource, dsTextDataSource, hsTextDataSource );
 }
 
 HlslProgRef HlslProg::create(
-	vk::DeviceRef device,
+	vk::DeviceRef		 device,
 	const DataSourceRef &vsTextDataSource,
 	const DataSourceRef &psTextDataSource,
 	const DataSourceRef &gsTextDataSource,
@@ -1023,10 +1284,10 @@ HlslProgRef HlslProg::create(
 	loadShaderText( dsTextDataSource, dsText );
 	loadShaderText( hsTextDataSource, hsText );
 
-	return create( device, vsText, psText, gsText, dsText, hsText );
+	return vk::HlslProg::create( device, vsText, psText, gsText, dsText, hsText );
 }
 
-HlslProgRef HlslProg::create(
+vk::HlslProgRef HlslProg::create(
 	const std::string &vsText,
 	const std::string &psText,
 	const std::string &gsText,
@@ -1034,10 +1295,10 @@ HlslProgRef HlslProg::create(
 	const std::string &hsText )
 {
 	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return create( device, vsText, psText, gsText, dsText, hsText );
+	return vk::HlslProg::create( device, vsText, psText, gsText, dsText, hsText );
 }
 
-HlslProgRef HlslProg::create(
+vk::HlslProgRef HlslProg::create(
 	vk::DeviceRef	   device,
 	const std::string &vsText,
 	const std::string &psText,
@@ -1045,24 +1306,43 @@ HlslProgRef HlslProg::create(
 	const std::string &dsText,
 	const std::string &hsText )
 {
-	vk::ShaderModuleRef vs = compileShader( device, vsText, VK_SHADER_STAGE_VERTEX_BIT );
-	vk::ShaderModuleRef ps = compileShader( device, psText, VK_SHADER_STAGE_FRAGMENT_BIT );
-	vk::ShaderModuleRef gs = compileShader( device, gsText, VK_SHADER_STAGE_GEOMETRY_BIT );
-	vk::ShaderModuleRef ds = compileShader( device, dsText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
-	vk::ShaderModuleRef hs = compileShader( device, hsText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
+	auto vsSpirv = compileShader( device, vsText, VK_SHADER_STAGE_VERTEX_BIT );
+	auto psSpirv = compileShader( device, psText, VK_SHADER_STAGE_FRAGMENT_BIT );
+	auto gsSpirv = compileShader( device, gsText, VK_SHADER_STAGE_GEOMETRY_BIT );
+	auto dsSpirv = compileShader( device, dsText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
+	auto hsSpirv = compileShader( device, hsText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
 
-	vk::ShaderProg::Format format = ShaderProg::Format();
-	format.vertex( vs );
-	format.fragment( ps );
-	format.geometry( gs );
-	format.tessellationEval( ds );
-	format.tessellationCtrl( hs );
-
-	return HlslProgRef( new HlslProg( device, format ) );
+	return vk::HlslProgRef( new vk::HlslProg(
+		device,
+		std::move( vsSpirv ),
+		std::move( psSpirv ),
+		std::move( gsSpirv ),
+		std::move( dsSpirv ),
+		std::move( hsSpirv ) ) );
 }
 
-HlslProg::HlslProg( vk::DeviceRef device, const ShaderProg::Format &format )
-	: vk::ShaderProg( device, format )
+HlslProg::HlslProg(
+	vk::DeviceRef		  device,
+	std::vector<char> &&  vsOrCsSpirv,
+	VkShaderStageFlagBits shaderStage )
+	: vk::ShaderProg( device, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
+{
+}
+
+HlslProg::HlslProg(
+	vk::DeviceRef		device,
+	std::vector<char> &&vsSpirv,
+	std::vector<char> &&psSpirv,
+	std::vector<char> &&gsSpirv,
+	std::vector<char> &&dsSpirv,
+	std::vector<char> &&hsSpirv )
+	: vk::ShaderProg(
+		  device,
+		  std::forward<std::vector<char>>( vsSpirv ),
+		  std::forward<std::vector<char>>( psSpirv ),
+		  std::forward<std::vector<char>>( gsSpirv ),
+		  std::forward<std::vector<char>>( dsSpirv ),
+		  std::forward<std::vector<char>>( hsSpirv ) )
 {
 }
 
@@ -1070,7 +1350,7 @@ HlslProg::~HlslProg()
 {
 }
 
-vk::ShaderModuleRef HlslProg::compileShader(
+std::vector<char> HlslProg::compileShader(
 	vk::DeviceRef			  device,
 	const std::string &		  text,
 	VkShaderStageFlagBits	  shaderStage,
@@ -1078,7 +1358,7 @@ vk::ShaderModuleRef HlslProg::compileShader(
 	vk::HlslProg::ShaderModel shaderModel )
 {
 	if ( text.empty() ) {
-		return vk::ShaderModuleRef();
+		return std::vector<char>();
 	}
 
 	const std::u16string kSpirvArg		  = toUtf16( "-spirv" );
@@ -1246,9 +1526,9 @@ vk::ShaderModuleRef HlslProg::compileShader(
 	}
 	//*/
 
-	vk::ShaderModuleRef shaderModule = vk::ShaderModule::create( sizeInBytes, pSpirvCode, device );
+	auto spirv = std::vector<char>( pSpirvCode, pSpirvCode + sizeInBytes );
 
-	return shaderModule;
+	return spirv;
 }
 
 } // namespace cinder::vk

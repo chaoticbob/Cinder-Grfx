@@ -139,34 +139,58 @@ public:
 	static vk::ShaderProgRef create( vk::DeviceRef device, const Format &format );
 
 	//! Create a shader program from shader modules
-	static ShaderProgRef create(
+	static vk::ShaderProgRef create(
+		vk::ShaderModuleRef	  vertOrCompModule,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
+
+	static vk::ShaderProgRef create(
 		vk::ShaderModuleRef vertModule,
-		vk::ShaderModuleRef fragModule = vk::ShaderModuleRef(),
-		vk::ShaderModuleRef geomModule = vk::ShaderModuleRef(),
-		vk::ShaderModuleRef teseModule = vk::ShaderModuleRef(),
-		vk::ShaderModuleRef tescModule = vk::ShaderModuleRef() );
+		vk::ShaderModuleRef fragModule,
+		vk::ShaderModuleRef geomModule = nullptr,
+		vk::ShaderModuleRef teseModule = nullptr,
+		vk::ShaderModuleRef tescModule = nullptr );
 
 	//! Create a shader program from SPIR-V data sources
-	static ShaderProgRef create(
-		vk::DeviceRef device,
-		DataSourceRef vertSpirv,
-		DataSourceRef fragSpirv = DataSourceRef(),
-		DataSourceRef geomSpirv = DataSourceRef(),
-		DataSourceRef teseSpirv = DataSourceRef(),
-		DataSourceRef tescSpirv = DataSourceRef() );
+	static vk::ShaderProgRef create(
+		vk::DeviceRef		  device,
+		const DataSourceRef & vertOrCompSpirvDataSource,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
-	bool isCompute() const { return mCS ? true : false; }
+	static vk::ShaderProgRef create(
+		vk::DeviceRef		 device,
+		const DataSourceRef &vertSpirvDataSource,
+		const DataSourceRef &fragSpirvDataSource,
+		const DataSourceRef &geomSpirvDataSource = nullptr,
+		const DataSourceRef &teseSpirvDataSource = nullptr,
+		const DataSourceRef &tescSpirvDataSource = nullptr );
 
-	vk::ShaderModuleRef getVertexShader() const { return mVS; }
-	vk::ShaderModuleRef getFragmentShader() const { return mPS; }
-	vk::ShaderModuleRef getGeometryShader() const { return mGS; }
-	vk::ShaderModuleRef getTessellationCtrlShader() const { return mHS; }
-	vk::ShaderModuleRef getTessellationEvalShader() const { return mDS; }
-	vk::ShaderModuleRef getComputeShader() const { return mVS; }
+	//! Create a shader program from SPIR-V
+	static vk::ShaderProgRef create(
+		vk::DeviceRef			 device,
+		const vk::SpirvBytecode &vsOrCsSpirv,
+		VkShaderStageFlagBits	 shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
-	vk::ShaderModuleRef getPixelShader() const { return mPS; }
-	vk::ShaderModuleRef getHullShader() const { return mHS; }
-	vk::ShaderModuleRef getDomainShader() const { return mDS; }
+	static vk::ShaderProgRef create(
+		vk::DeviceRef			 device,
+		const vk::SpirvBytecode &vsSpirv,
+		const vk::SpirvBytecode &psSpirv,
+		const vk::SpirvBytecode &gsSpirv = vk::SpirvBytecode{ 0, nullptr },
+		const vk::SpirvBytecode &dsSpirv = vk::SpirvBytecode{ 0, nullptr },
+		const vk::SpirvBytecode &hsSpirv = vk::SpirvBytecode{ 0, nullptr } );
+
+	bool isGraphics() const { return mVs ? true : false; }
+	bool isCompute() const { return mCs ? true : false; }
+
+	vk::ShaderModuleRef getVertexShader() const { return mVs; }
+	vk::ShaderModuleRef getFragmentShader() const { return mPs; }
+	vk::ShaderModuleRef getGeometryShader() const { return mGs; }
+	vk::ShaderModuleRef getTessellationEvalShader() const { return mDs; }
+	vk::ShaderModuleRef getTessellationCtrlShader() const { return mHs; }
+	vk::ShaderModuleRef getComputeShader() const { return mVs; }
+
+	vk::ShaderModuleRef getPixelShader() const { return getFragmentShader(); }
+	vk::ShaderModuleRef getDomainShader() const { return getTessellationEvalShader(); }
+	vk::ShaderModuleRef getHullShader() const { return getTessellationCtrlShader(); }
 
 	const std::vector<vk::InterfaceVariable> &getVertexAttributes() const;
 
@@ -175,18 +199,39 @@ public:
 	const UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
 
 protected:
-	ShaderProg( vk::DeviceRef device, const Format &format );
+	ShaderProg(
+		vk::ShaderModuleRef vs,
+		vk::ShaderModuleRef ps,
+		vk::ShaderModuleRef gs,
+		vk::ShaderModuleRef ds,
+		vk::ShaderModuleRef hs,
+		vk::ShaderModuleRef cs );
 
+	ShaderProg(
+		vk::DeviceRef		  device,
+		std::vector<char> &&  vsOrCsSpirv,
+		VkShaderStageFlagBits shaderStage );
+
+	ShaderProg(
+		vk::DeviceRef		device,
+		std::vector<char> &&vsSpirv,
+		std::vector<char> &&psSpirv,
+		std::vector<char> &&gsSpirv,
+		std::vector<char> &&dsSpirv,
+		std::vector<char> &&hsSpirv );
+
+private:
+	void parseModules();
 	void parseDscriptorBindings( const vk::ShaderModule *shader );
 	void parseUniformBlocks( const vk::ShaderModule *shader );
 
 private:
-	vk::ShaderModuleRef mVS; // Vertex
-	vk::ShaderModuleRef mPS; // Pixel / Fragment
-	vk::ShaderModuleRef mGS; // Geometry
-	vk::ShaderModuleRef mHS; // Hull / Tessellation Control
-	vk::ShaderModuleRef mDS; // Domain / Tessellation Evaluate
-	vk::ShaderModuleRef mCS; // Compute
+	vk::ShaderModuleRef mVs; // Vertex
+	vk::ShaderModuleRef mPs; // Pixel / Fragment
+	vk::ShaderModuleRef mGs; // Geometry
+	vk::ShaderModuleRef mDs; // Domain / Tessellation Evaluate
+	vk::ShaderModuleRef mHs; // Hull / Tessellation Control
+	vk::ShaderModuleRef mCs; // Compute
 
 	std::vector<vk::InterfaceVariable>				   mNullVariables;
 	std::map<uint32_t, std::vector<DescriptorBinding>> mDescriptorSetBindings;
@@ -203,43 +248,78 @@ class GlslProg
 public:
 	virtual ~GlslProg();
 
+	// Create GLSL prog from data source using current context's device
 	static GlslProgRef create(
-		const DataSourceRef &vertTextDataSource,
-		const DataSourceRef &fragTextDataSource = DataSourceRef(),
-		const DataSourceRef &geomTextDataSource = DataSourceRef(),
-		const DataSourceRef &teseTextDataSource = DataSourceRef(),
-		const DataSourceRef &tescTextDataSource = DataSourceRef() );
+		const DataSourceRef & vsOrCsTextDataSource,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static GlslProgRef create(
-		vk::DeviceRef device,
-		const DataSourceRef &vertTextDataSource,
-		const DataSourceRef &fragTextDataSource = DataSourceRef(),
-		const DataSourceRef &geomTextDataSource = DataSourceRef(),
-		const DataSourceRef &teseTextDataSource = DataSourceRef(),
-		const DataSourceRef &tescTextDataSource = DataSourceRef() );
+		const DataSourceRef &vsTextDataSource,
+		const DataSourceRef &psTextDataSource,
+		const DataSourceRef &gsTextDataSource = nullptr,
+		const DataSourceRef &dsTextDataSource = nullptr,
+		const DataSourceRef &hsTextDataSource = nullptr );
+
+	// Create GLSL prog from data source using device
+	static GlslProgRef create(
+		vk::DeviceRef		  device,
+		const DataSourceRef & vsOrCsTextDataSource,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static GlslProgRef create(
-		const std::string &vertText,
-		const std::string &fragText = std::string(),
-		const std::string &geomText = std::string(),
-		const std::string &teseText = std::string(),
-		const std::string &tescText = std::string() );
+		vk::DeviceRef		 device,
+		const DataSourceRef &vsTextDataSource,
+		const DataSourceRef &psTextDataSource,
+		const DataSourceRef &gsTextDataSource = nullptr,
+		const DataSourceRef &dsTextDataSource = nullptr,
+		const DataSourceRef &hsTextDataSource = nullptr );
+
+	// Create GLSL prog from text source code using current context's device
+	static GlslProgRef create(
+		const std::string &	  vsOrCsText,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
+
+	static GlslProgRef create(
+		const std::string &vsText,
+		const std::string &psText,
+		const std::string &gsText = "",
+		const std::string &dsText = "",
+		const std::string &hsText = "" );
+
+	// Create GLSL prog from text source code using device
+	static GlslProgRef create(
+		vk::DeviceRef		  device,
+		const std::string &	  vsOrCsText,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static GlslProgRef create(
 		vk::DeviceRef	   device,
-		const std::string &vertText,
-		const std::string &fragText = std::string(),
-		const std::string &geomText = std::string(),
-		const std::string &teseText = std::string(),
-		const std::string &tescText = std::string() );
+		const std::string &vsText,
+		const std::string &psText,
+		const std::string &gsText = "",
+		const std::string &dsText = "",
+		const std::string &hsText = "" );
 
 	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
 
 private:
-	GlslProg( vk::DeviceRef device, const vk::ShaderProg::Format &format );
+	GlslProg(
+		vk::DeviceRef		  device,
+		std::vector<char> &&  vsOrCsSpirv,
+		VkShaderStageFlagBits shaderStage );
 
-	//static void				   loadShader( DataSourceRef dataSource, std::string &sourceTarget );
-	static vk::ShaderModuleRef compileShader( vk::DeviceRef device, const std::string &source, VkShaderStageFlagBits stage );
+	GlslProg(
+		vk::DeviceRef		device,
+		std::vector<char> &&vsSpirv,
+		std::vector<char> &&psSpirv,
+		std::vector<char> &&gsSpirv,
+		std::vector<char> &&dsSpirv,
+		std::vector<char> &&hsSpirv );
+
+	static std::vector<char> compileShader(
+		vk::DeviceRef		  device,
+		const std::string &	  source,
+		VkShaderStageFlagBits stage );
 
 private:
 	vk::ShaderProgRef mShaderProg;
@@ -267,42 +347,75 @@ public:
 
 	virtual ~HlslProg();
 
+	// Create HLSL prog from data source using current context's device
 	static HlslProgRef create(
-		const DataSourceRef &vsTextDataSource,
-		const DataSourceRef &psTextDataSource = DataSourceRef(),
-		const DataSourceRef &gsTextDataSource = DataSourceRef(),
-		const DataSourceRef &dsTextDataSource = DataSourceRef(),
-		const DataSourceRef &hsTextDataSource = DataSourceRef() );
+		const DataSourceRef & vsOrCsTextDataSource,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static HlslProgRef create(
-		vk::DeviceRef device,
 		const DataSourceRef &vsTextDataSource,
-		const DataSourceRef &psTextDataSource = DataSourceRef(),
-		const DataSourceRef &gsTextDataSource = DataSourceRef(),
-		const DataSourceRef &dsTextDataSource = DataSourceRef(),
-		const DataSourceRef &hsTextDataSource = DataSourceRef() );
+		const DataSourceRef &psTextDataSource,
+		const DataSourceRef &gsTextDataSource = nullptr,
+		const DataSourceRef &dsTextDataSource = nullptr,
+		const DataSourceRef &hsTextDataSource = nullptr );
+
+	// Create HLSL prog from data source using device
+	static HlslProgRef create(
+		vk::DeviceRef		  device,
+		const DataSourceRef & vsOrCsTextDataSource,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
+
+	static HlslProgRef create(
+		vk::DeviceRef		 device,
+		const DataSourceRef &vsTextDataSource,
+		const DataSourceRef &psTextDataSource,
+		const DataSourceRef &gsTextDataSource = nullptr,
+		const DataSourceRef &dsTextDataSource = nullptr,
+		const DataSourceRef &hsTextDataSource = nullptr );
+
+	// Create HLSL prog from text source code using current context's device
+	static HlslProgRef create(
+		const std::string &	  vsOrCsText,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static HlslProgRef create(
 		const std::string &vsText,
-		const std::string &psText = std::string(),
-		const std::string &gsText = std::string(),
-		const std::string &dsText = std::string(),
-		const std::string &hsText = std::string() );
+		const std::string &psText,
+		const std::string &gsText = "",
+		const std::string &dsText = "",
+		const std::string &hsText = "" );
+
+	// Create HLSL prog from text source code using device
+	static HlslProgRef create(
+		vk::DeviceRef		  device,
+		const std::string &	  vsOrCsText,
+		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static HlslProgRef create(
 		vk::DeviceRef	   device,
 		const std::string &vsText,
-		const std::string &psText = std::string(),
-		const std::string &gsText = std::string(),
-		const std::string &dsText = std::string(),
-		const std::string &hsText = std::string() );
+		const std::string &psText,
+		const std::string &gsText = "",
+		const std::string &dsText = "",
+		const std::string &hsText = "" );
 
 	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
 
 private:
-	HlslProg( vk::DeviceRef device, const vk::ShaderProg::Format &format );
+	HlslProg(
+		vk::DeviceRef		  device,
+		std::vector<char> &&  vsOrCsSpirv,
+		VkShaderStageFlagBits shaderStage );
 
-	static vk::ShaderModuleRef compileShader(
+	HlslProg(
+		vk::DeviceRef		device,
+		std::vector<char> &&vsSpirv,
+		std::vector<char> &&psSpirv,
+		std::vector<char> &&gsSpirv,
+		std::vector<char> &&dsSpirv,
+		std::vector<char> &&hsSpirv );
+
+	static std::vector<char> compileShader(
 		vk::DeviceRef			  device,
 		const std::string &		  sourceText,
 		VkShaderStageFlagBits	  shaderStage,
