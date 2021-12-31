@@ -706,6 +706,53 @@ static std::vector<SpvReflectInterfaceVariable *> getOutputVariables(
 	return vars;
 }
 
+const uint32_t kSpirvWordSize		   = sizeof( uint32_t );
+const uint32_t kSpirvBoundOffset	   = 3;
+const uint32_t kSprivStartingWordIndex = 5;
+
+static void removeRelaxedPrecision(
+	std::vector<char> *								  spirv,
+	spv_reflect::ShaderModule &						  reflection,
+	const std::vector<SpvReflectInterfaceVariable *> &targetVars )
+{
+	uint32_t *	   pWords		  = reinterpret_cast<uint32_t *>( spirv->data() );
+	const uint32_t totalWordCount = static_cast<uint32_t>( spirv->size() / kSpirvWordSize );
+
+	// Get a list of <op word index, op word count> for instructions to remove
+	std::vector<std::pair<uint32_t, uint32_t>> removeInfo;
+
+	uint32_t wordIndex = kSprivStartingWordIndex;
+	while ( wordIndex < totalWordCount ) {
+		const uint32_t word		 = pWords[wordIndex];
+		const SpvOp	   op		 = (SpvOp)( word & SpvOpCodeMask );
+		const uint32_t wordCount = ( word >> SpvWordCountShift ) & SpvOpCodeMask;
+
+		if ( ( op == SpvOpDecorate ) && ( wordCount >= 3 ) ) {
+			const uint32_t		id		   = pWords[wordIndex + 1];
+			const SpvDecoration decoration = static_cast<SpvDecoration>( pWords[wordIndex + 2] );
+			if ( decoration == SpvDecorationRelaxedPrecision ) {
+				for ( size_t i = 0; i < targetVars.size(); ++i ) {
+					if ( targetVars[i]->spirv_id == id ) {
+						removeInfo.push_back( std::make_pair( wordIndex, wordCount ) );
+					}
+				}
+			}
+		}
+
+		wordIndex += wordCount;
+	}
+
+	// Remove in backwards order
+	const size_t n = removeInfo.size();
+	for ( size_t i = 0; i < n; ++i ) {
+		const size_t j	 = n - i - 1;
+		auto & info	 = removeInfo[j];
+		auto   first = spirv->begin() + ( info.first * kSpirvWordSize );
+		auto   last	 = first + ( info.second * kSpirvWordSize );
+		spirv->erase( first, last );
+	}
+}
+
 static void alignInterfaceVariables(
 	std::vector<char> *outStage,
 	std::vector<char> *inStage )
@@ -759,7 +806,7 @@ static void alignInterfaceVariables(
 					changed = true;
 				}
 				// Check for precion differences
-				if (outVar->decoration_flags & SPV_REFLECT_DECORATION_RELAXED_PRECISION) {
+				if ( outVar->decoration_flags & SPV_REFLECT_DECORATION_RELAXED_PRECISION ) {
 				}
 			}
 		}
@@ -768,7 +815,29 @@ static void alignInterfaceVariables(
 	if ( changed ) {
 		const size_t sizeInBytes = inReflection.GetCodeSize();
 		const char * pCode		 = reinterpret_cast<const char *>( inReflection.GetCode() );
-		*inStage = std::vector<char>( pCode, pCode + sizeInBytes );
+		*inStage				 = std::vector<char>( pCode, pCode + sizeInBytes );
+	}
+
+	// Remove RelaxedPrecision decoration for output variables in output stage
+	std::vector<SpvReflectInterfaceVariable *> relaxedVars;
+	for ( size_t i = 0; i < outVars.size(); ++i ) {
+		if ( outVars[i]->decoration_flags & SPV_REFLECT_DECORATION_RELAXED_PRECISION ) {
+			relaxedVars.push_back( outVars[i] );
+		}
+	}
+	if ( !relaxedVars.empty() ) {
+		removeRelaxedPrecision( outStage, outReflection, relaxedVars );
+	}
+
+	// Remove RelaxedPrecision decoration for input variables in input stage
+	relaxedVars.clear();
+	for ( size_t i = 0; i < inVars.size(); ++i ) {
+		if ( inVars[i]->decoration_flags & SPV_REFLECT_DECORATION_RELAXED_PRECISION ) {
+			relaxedVars.push_back( inVars[i] );
+		}
+	}
+	if ( !relaxedVars.empty() ) {
+		removeRelaxedPrecision( inStage, inReflection, relaxedVars );
 	}
 }
 
