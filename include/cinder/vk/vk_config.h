@@ -157,9 +157,11 @@ class Semaphore;
 class ShaderModule;
 class ShaderProg;
 class Swapchain;
+class TextureBase;
 class Texture1d;
 class Texture2d;
 class Texture3d;
+class TextureCubeMap;
 class UniformBuffer;
 
 using BatchRef				 = std::shared_ptr<Batch>;
@@ -188,6 +190,11 @@ using SemaphoreRef			 = std::shared_ptr<Semaphore>;
 using ShaderModuleRef		 = std::shared_ptr<ShaderModule>;
 using ShaderProgRef			 = std::shared_ptr<ShaderProg>;
 using SwapchainRef			 = std::shared_ptr<Swapchain>;
+using TextureBaseRef		 = std::shared_ptr<TextureBase>;
+using Texture1dRef			 = std::shared_ptr<Texture1d>;
+using Texture2dRef			 = std::shared_ptr<Texture2d>;
+using Texture3dRef			 = std::shared_ptr<Texture3d>;
+using TextureCubeMapRef		 = std::shared_ptr<TextureCubeMap>;
 using UniformBufferRef		 = std::shared_ptr<UniformBuffer>;
 
 class CI_API VulkanExc : public cinder::Exception
@@ -244,7 +251,7 @@ const T *dataPtr( const std::vector<T> &container )
 }
 
 inline bool hasExtension(
-	const std::string &						  name,
+	const std::string						&name,
 	const std::vector<VkExtensionProperties> &foundExtensions )
 {
 	auto it = std::find_if(

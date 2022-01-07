@@ -251,11 +251,11 @@ void CommandBuffer::end()
 
 void CommandBuffer::bindDescriptorSets(
 	VkPipelineBindPoint						 pipelineBindPoint,
-	const vk::PipelineLayoutRef &			 pipelineLayout,
+	const vk::PipelineLayoutRef				&pipelineLayout,
 	uint32_t								 firstSet,
 	const std::vector<vk::DescriptorSetRef> &sets,
 	uint32_t								 dynamicOffsetCount,
-	const uint32_t *						 pDynamicOffsets )
+	const uint32_t						  *pDynamicOffsets )
 {
 	std::vector<VkDescriptorSet> handles;
 	for ( auto &set : sets ) {
@@ -320,21 +320,21 @@ void CommandBuffer::setScissor( int32_t x, int32_t y, uint32_t width, uint32_t h
 void CommandBuffer::setViewport( float x, float y, float width, float height, float minDepth, float maxDepth )
 {
 	VkViewport viewport = {};
-//*
+	//*
 	viewport.x			= x;
 	viewport.y			= height;
 	viewport.width		= width;
 	viewport.height		= -height;
 	viewport.minDepth	= minDepth;
 	viewport.maxDepth	= maxDepth;
-/*/
-	viewport.x			= x;
-	viewport.y			= y;
-	viewport.width		= width;
-	viewport.height		= height;
-	viewport.minDepth	= minDepth;
-	viewport.maxDepth	= maxDepth;
-//*/
+	/*/
+		viewport.x			= x;
+		viewport.y			= y;
+		viewport.width		= width;
+		viewport.height		= height;
+		viewport.minDepth	= minDepth;
+		viewport.maxDepth	= maxDepth;
+	//*/
 	CI_VK_DEVICE_FN( CmdSetViewport( getCommandBufferHandle(), 0, 1, &viewport ) );
 }
 
@@ -408,6 +408,26 @@ void CommandBuffer::bindVertexBuffers( uint32_t firstBinding, const std::vector<
 		countU32( handles ),
 		dataPtr( handles ),
 		dataPtr( offsets ) ) );
+}
+
+void CommandBuffer::setCullMode( VkCullModeFlags cullMode )
+{
+	CI_VK_DEVICE_FN( CmdSetCullModeEXT( getCommandBufferHandle(), cullMode ) );
+}
+
+void CommandBuffer::setDepthTestEnable( bool depthTestEnable )
+{
+	CI_VK_DEVICE_FN( CmdSetDepthTestEnableEXT( getCommandBufferHandle(), depthTestEnable ) );
+}
+
+void CommandBuffer::setDepthWriteEnable( bool depthWriteEnable )
+{
+	CI_VK_DEVICE_FN( CmdSetDepthWriteEnableEXT( getCommandBufferHandle(), depthWriteEnable ) );
+}
+
+void CommandBuffer::setFrontFace( VkFrontFace frontFace )
+{
+	CI_VK_DEVICE_FN( CmdSetFrontFaceEXT( getCommandBufferHandle(), frontFace ) );
 }
 
 void CommandBuffer::draw( uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance )

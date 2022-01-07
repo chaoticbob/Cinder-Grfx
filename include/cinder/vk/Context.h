@@ -19,18 +19,34 @@ private:
 	//
 	struct Frame
 	{
+		struct DrawCall
+		{
+			bool				 inUse;
+			vk::DescriptorSetRef descriptorSet;
+			vk::BufferRef		 defaultUniformBuffer;
+		};
+
 		vk::DescriptorPoolRef descriptorPool;
-		vk::DescriptorSetRef  descriptorSet;
-		vk::BufferRef		  defaultUniformBuffer;
+		// vk::DescriptorSetRef							descriptorSet;
+		// vk::BufferRef									defaultUniformBuffer;
+		// std::vector<std::pair<uint32_t, vk::BufferRef>> defaultUniformBuffers;
+		// vk::Buffer									 *currentDefaultUniformBuffer = nullptr;
+
+		std::vector<std::unique_ptr<DrawCall>> drawCalls;
+		DrawCall							  *currentDrawCall = nullptr;
 
 		std::vector<vk::ImageRef>	  renderTargets;
-		vk::ImageRef				  depthTarget;
-		vk::ImageRef				  stencilTarget;
+		vk::ImageRef				  depthStencil;
 		std::vector<vk::ImageViewRef> rtvs;
-		vk::ImageViewRef			  dtv;
-		vk::ImageViewRef			  stv;
+		vk::ImageViewRef			  dsv;
 		vk::CommandBufferRef		  commandBuffer;
 		uint64_t					  frameSignaledValue;
+
+		// void resetDefaultUniformBuffers();
+		// void nextDefaultUniformBuffer();
+
+		void resetDrawCalls();
+		void nextDrawCall( const vk::DescriptorSetLayoutRef& defaultSetLayout );
 	};
 
 public:
@@ -42,26 +58,16 @@ public:
 
 		// clang-format off
 		Options &numInFlightFrames( uint32_t value ) { mNumInFlightFrames = std::max<uint32_t>( 1, value ); return *this; }
-		Options &setRenderTarget( VkFormat format ) { mRenderTargetFormat = format; return *this; }
-		Options &setDepthStencilFormat( VkFormat format ) { mDepthFormat = format; mStencilFormat = format; return *this; }
-		Options &addRenderTarget( VkFormat format ) { mAdditionalRenderTargets.push_back( format ); return *this; }
+		Options &setRenderTargets( std::vector<VkFormat> formats ) { mRenderTargetFormats = formats; return *this; }
+		Options &setDepthStencil( VkFormat format ) { mDepthStencilFormat = format; return *this; }
 		Options &sampleCount( uint32_t value );
 		// clang-format on
 
 	private:
-		// clang-format off
-		// Make these public when seperated depth/stencil has landed.		
-		Options &setDepthFormat( VkFormat format ) { mDepthFormat = format; return *this; }
-		Options &setStencilFormat( VkFormat format ) { mStencilFormat = format; return *this; }
-		// clang-format on
-
-	private:
-		uint32_t			  mNumInFlightFrames	   = 2;
-		VkFormat			  mRenderTargetFormat	   = VK_FORMAT_R8G8B8A8_UNORM;
-		VkFormat			  mDepthFormat			   = VK_FORMAT_D32_SFLOAT_S8_UINT;
-		VkFormat			  mStencilFormat		   = VK_FORMAT_D32_SFLOAT_S8_UINT;
-		VkSampleCountFlagBits mSampleCount			   = VK_SAMPLE_COUNT_1_BIT;
-		std::vector<VkFormat> mAdditionalRenderTargets = {};
+		uint32_t			  mNumInFlightFrames   = 2;
+		std::vector<VkFormat> mRenderTargetFormats = { VK_FORMAT_R8G8B8A8_UNORM };
+		VkFormat			  mDepthStencilFormat  = VK_FORMAT_D32_SFLOAT_S8_UINT;
+		VkSampleCountFlagBits mSampleCount		   = VK_SAMPLE_COUNT_1_BIT;
 
 		friend class Context;
 	};
@@ -96,9 +102,12 @@ public:
 	void clearStencil( const int stencil ) { mClearValues.stencil = static_cast<uint8_t>( stencil ); }
 
 	// clang-format off
-	void enableDepthWrite( bool enable ) { mGraphicsState.ds.depthWriteEnable = enable; }
-	void enableDepthTest( bool enable ) { mGraphicsState.ds.depthTestEnable = enable; }
-	void enableStencilTest( bool enable ) { mGraphicsState.ds.stencilTestEnable = enable; }
+	//void enableDepthWrite( bool enable ) { mGraphicsState.ds.depthWriteEnable = enable; }
+	//void enableDepthTest( bool enable ) { mGraphicsState.ds.depthTestEnable = enable; }
+	//void enableStencilTest( bool enable ) { mGraphicsState.ds.stencilTestEnable = enable; }
+	void enableDepthWrite( bool enable ) { mDynamicStates.depthWrite = enable; }
+	void enableDepthTest( bool enable ) { mDynamicStates.depthTest = enable; }
+	void enableStencilTest( bool enable ) { mDynamicStates.stencilTest = enable; }
 	// clang-format on
 
 	std::vector<ci::mat4> &getModelMatrixStack() { return mModelMatrixStack; }
@@ -109,8 +118,19 @@ public:
 
 	void bindShaderProg( vk::ShaderProgRef prog );
 
-	void bindTexture( uint32_t binding, vk::ImageView *imageView, vk::Sampler *sampler );
-	void unbindTexture( uint32_t binding );
+	void				   bindTexture( const vk::TextureBase *texture, uint32_t binding );
+	void				   unbindTexture( uint32_t binding );
+	void				   pushTextureBinding( const vk::TextureBase *texture );
+	void				   pushTextureBinding( const vk::TextureBase *texture, uint32_t binding );
+	void				   popTextureBinding( uint32_t binding, bool forceRestore = false );
+	const vk::TextureBase *getTextureBinding();
+	const vk::TextureBase *getTextureBinding( uint32_t binding );
+
+	void	 setActiveTexture( uint32_t binding );
+	void	 pushActiveTexture( uint32_t binding );
+	void	 pushActiveTexture();
+	void	 popActiveTexture( bool forceRestore = false );
+	uint32_t getActiveTexture();
 
 	void setDefaultShaderVars();
 
@@ -121,9 +141,7 @@ public:
 	uint32_t			 getFrameIndex() const { return mFrameIndex; }
 	uint32_t			 getNumRenderTargets() const { return countU32( mRenderTargetFormats ); }
 	const vk::ImageView *getRenderTargetView( uint32_t index ) const { return getCurrentFrame().rtvs[index].get(); }
-	const vk::ImageView *getDepthStencilView() const { return mCombinedDepthStencil ? getCurrentFrame().dtv.get() : nullptr; }
-	const vk::ImageView *getDepthTargetView() const { return getCurrentFrame().dtv.get(); }
-	const vk::ImageView *getStencilTargetView() const { return getCurrentFrame().stv.get(); }
+	const vk::ImageView *getDepthStencilView() const { return getCurrentFrame().dsv.get(); }
 
 	void clearColorAttachment( uint32_t index );
 	void clearDepthStencilAttachment( VkImageAspectFlags aspectMask );
@@ -141,10 +159,25 @@ private:
 	void		 initializeDescriptorSetLayouts();
 	void		 initializePipelineLayout();
 	void		 initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame );
-	Frame &		 getCurrentFrame();
+	Frame		  &getCurrentFrame();
 	const Frame &getCurrentFrame() const;
 
 	void assignVertexAttributeLocations();
+	void initTextureBindingStack( uint32_t binding );
+	void setDynamicStates( bool force = false );
+
+	//! Returns \c true if \a value is different from the previous top of the stack
+	template <typename T>
+	bool pushStackState( std::vector<T> &stack, T value );
+	//! Returns \c true if the new top of \a stack is different from the previous top, or the stack is empty
+	template <typename T>
+	bool popStackState( std::vector<T> &stack );
+	//! Returns \c true if \a value is different from the previous top of the stack
+	template <typename T>
+	bool setStackState( std::vector<T> &stack, T value );
+	//! Returns \c true if \a result is valid; will return \c false when \a stack was empty
+	template <typename T>
+	bool getStackState( std::vector<T> &stack, T *result );
 
 private:
 	struct ClearValues
@@ -168,25 +201,68 @@ private:
 	};
 */
 
+	template <typename ValueT>
+	class StateT
+	{
+	public:
+		StateT( const ValueT &value = ValueT() )
+			: mValue( value ), mDirty( true ) {}
+		~StateT() {}
+
+		bool isDirty() const { return mDirty; }
+		void setClean() { mDirty = false; }
+
+		void setValue( const ValueT &value )
+		{
+			mDirty = ( mValue != value );
+			if ( mDirty ) {
+				mValue = value;
+			}
+		}
+
+		const ValueT &getValue() const
+		{
+			return mValue;
+		}
+
+		StateT &operator=( const ValueT &value )
+		{
+			setValue( value );
+			return *this;
+		}
+
+	private:
+		bool   mDirty = true;
+		ValueT mValue = ValueT();
+	};
+
+	struct DynamicStates
+	{
+		StateT<bool>		depthWrite	= StateT<bool>( false );
+		StateT<bool>		depthTest	= StateT<bool>( false );
+		StateT<bool>		stencilTest = StateT<bool>( false );
+		StateT<VkFrontFace> frontFace	= StateT<VkFrontFace>( VK_FRONT_FACE_COUNTER_CLOCKWISE );
+	};
+
 	class DescriptorState
 	{
 	public:
 		DescriptorState();
 		~DescriptorState() {}
 
-		void bindUniformBuffer( uint32_t bindingNumber, vk::Buffer *buffer );
-		void bindCombinedImageSampler( uint32_t bindingNumber, vk::ImageView *imageView, vk::Sampler *sampler );
+		void bindUniformBuffer( uint32_t bindingNumber, const vk::Buffer *buffer );
+		void bindCombinedImageSampler( uint32_t bindingNumber, const vk::ImageView *imageView, const vk::Sampler *sampler );
 
 	private:
 		struct BufferInfo
 		{
-			vk::Buffer *buffer;
+			const vk::Buffer *buffer;
 		};
 
 		struct ImageInfo
 		{
-			vk::ImageView *imageView;
-			vk::Sampler *  sampler;
+			const vk::ImageView *imageView;
+			const vk::Sampler	  *sampler;
 		};
 
 		struct Descriptor
@@ -202,10 +278,10 @@ private:
 
 			Descriptor() {}
 
-			Descriptor( uint32_t aBindingNumber, vk::Buffer *aBuffer )
+			Descriptor( uint32_t aBindingNumber, const vk::Buffer *aBuffer )
 				: type( VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ), bindingNumber( aBindingNumber ), bufferInfo( { aBuffer } ) {}
 
-			Descriptor( uint32_t aBindingNumber, vk::ImageView *aImageView, vk::Sampler *aSampler )
+			Descriptor( uint32_t aBindingNumber, const vk::ImageView *aImageView, const vk::Sampler *aSampler )
 				: type( VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER ), bindingNumber( aBindingNumber ), imageInfo( { aImageView, aSampler } ) {}
 		};
 
@@ -214,14 +290,12 @@ private:
 		friend class Context;
 	};
 
-	uint32_t			  mNumFramesInFlight	= 0;
-	uint32_t			  mWidth				= 0;
-	uint32_t			  mHeight				= 0;
-	std::vector<VkFormat> mRenderTargetFormats	= {};
-	VkFormat			  mDepthFormat			= VK_FORMAT_UNDEFINED;
-	VkFormat			  mStencilFormat		= VK_FORMAT_UNDEFINED;
-	bool				  mCombinedDepthStencil = false;
-	VkSampleCountFlagBits mSampleCount			= VK_SAMPLE_COUNT_1_BIT;
+	uint32_t			  mNumFramesInFlight   = 0;
+	uint32_t			  mWidth			   = 0;
+	uint32_t			  mHeight			   = 0;
+	std::vector<VkFormat> mRenderTargetFormats = {};
+	VkFormat			  mDepthStencilFormat  = VK_FORMAT_UNDEFINED;
+	VkSampleCountFlagBits mSampleCount		   = VK_SAMPLE_COUNT_1_BIT;
 
 	CommandPoolRef			 mCommandPool;
 	std::vector<Frame>		 mFrames;
@@ -230,7 +304,13 @@ private:
 	uint32_t				 mPreviousFrameIndex = 0;
 	vk::CountingSemaphoreRef mFrameSyncSemaphore;
 
+	// descriptor bindig -> combined image / sampler
+	std::map<uint32_t, std::vector<const vk::TextureBase *>> mTextureBindingStack;
+	// This stores the descriptor binding number for textures starting from 0
+	std::vector<uint32_t>									 mActiveTextureStack;
+
 	ClearValues							 mClearValues = {};
+	DynamicStates						 mDynamicStates;
 	std::vector<std::pair<ivec2, ivec2>> mViewportStack;
 	std::vector<std::pair<ivec2, ivec2>> mScissorStack;
 	std::vector<ci::mat4>				 mModelMatrixStack;
@@ -239,12 +319,14 @@ private:
 
 	std::vector<std::pair<geom::BufferLayout, vk::BufferRef>> mVertexBuffers;
 	vk::ShaderProgRef										  mShaderProgram;
-	vk::Pipeline::GraphicsPipelineState						  mGraphicsState = {};
+	vk::Pipeline::GraphicsPipelineCreateInfo				  mGraphicsState;
+	uint64_t												  mCurrentGraphicsPipelineHash;
 
-	vk::DescriptorSetLayoutRef mDefaultSetLayout;
-	vk::PipelineLayoutRef	   mDefaultPipelineLayout;
-	DescriptorState			   mDescriptorState;
-	vk::PipelineRef			   mGraphicsPipeline;
+	vk::DescriptorSetLayoutRef			mDefaultSetLayout;
+	vk::PipelineLayoutRef				mDefaultPipelineLayout;
+	DescriptorState						mDescriptorState;
+	vk::PipelineRef						mGraphicsPipeline;
+	std::map<uint64_t, vk::PipelineRef> mGraphicsPipelines;
 };
 
 } // namespace cinder::vk

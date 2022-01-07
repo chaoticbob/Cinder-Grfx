@@ -1,9 +1,9 @@
 ---
 AccessModifierOffset: -4
 AlignAfterOpenBracket: AlwaysBreak
-AlignConsecutiveAssignments: true
+AlignConsecutiveAssignments: AcrossComments
 AlignConsecutiveBitFields: true
-AlignConsecutiveDeclarations: true
+AlignConsecutiveDeclarations: AcrossComments
 AlignConsecutiveMacros: true
 AlignEscapedNewlines: Left
 AlignOperands: true
@@ -59,6 +59,8 @@ PenaltyBreakBeforeFirstCallParameter: 10
 PenaltyBreakComment: 60
 PenaltyReturnTypeOnItsOwnLine: 1000
 PointerAlignment: Right
+QualifierAlignment: Leave 
+ReferenceAlignment: Right
 ReflowComments: true
 SortIncludes: false
 SpaceAfterCStyleCast: false

@@ -80,4 +80,35 @@ CI_API mat3 calcModelMatrixInverseTranspose();
 CI_API mat3 calcNormalMatrix();
 CI_API mat4 calcViewportMatrix();
 
+CI_API void setMatricesWindowPersp( int screenWidth, int screenHeight, float fovDegrees = 60.0f, float nearPlane = 1.0f, float farPlane = 1000.0f, bool originUpperLeft = true );
+CI_API void setMatricesWindowPersp( const ci::ivec2 &screenSize, float fovDegrees = 60.0f, float nearPlane = 1.0f, float farPlane = 1000.0f, bool originUpperLeft = true );
+CI_API void setMatricesWindow( int screenWidth, int screenHeight, bool originUpperLeft = true );
+CI_API void setMatricesWindow( const ci::ivec2 &screenSize, bool originUpperLeft = true );
+
+CI_API void rotate( const quat &quat );
+//! Rotates the Model matrix by \a angleRadians around the \a axis
+CI_API void rotate( float angleRadians, const ci::vec3 &axis );
+//! Rotates the Model matrix by \a angleRadians around the axis (\a x,\a y,\a z)
+CI_API inline void rotate( float angleRadians, float xAxis, float yAxis, float zAxis ) { rotate( angleRadians, ci::vec3(xAxis, yAxis, zAxis) ); }
+//! Rotates the Model matrix by \a zRadians around the z-axis
+CI_API inline void rotate( float zRadians ) { rotate( zRadians, vec3( 0, 0, 1 ) ); }
+
+//! Scales the Model matrix by \a v
+CI_API void scale( const ci::vec3 &v );
+//! Scales the Model matrix by (\a x,\a y, \a z)
+CI_API inline void scale( float x, float y, float z ) { scale( vec3( x, y, z ) ); }
+//! Scales the Model matrix by \a v
+CI_API inline void scale( const ci::vec2 &v ) { scale( vec3( v.x, v.y, 1 ) ); }
+//! Scales the Model matrix by (\a x,\a y, 1)
+CI_API inline void scale( float x, float y ) { scale( vec3( x, y, 1 ) ); }
+
+//! Translates the Model matrix by \a v
+CI_API void translate( const ci::vec3 &v );
+//! Translates the Model matrix by (\a x,\a y,\a z )
+CI_API inline void translate( float x, float y, float z ) { translate( vec3( x, y, z ) ); }
+//! Translates the Model matrix by \a v
+CI_API inline void translate( const ci::vec2 &v ) { translate( vec3( v, 0 ) ); }
+//! Translates the Model matrix by (\a x,\a y)
+CI_API inline void translate( float x, float y ) { translate( vec3( x, y, 0 ) ); }
+
 } // namespace cinder::vk

@@ -31,12 +31,12 @@ public:
 		Layout&		attrib( const geom::AttribInfo &attribInfo );
 		// clang-format on
 
-		std::vector<geom::AttribInfo> &		 getAttribs() { return mAttribInfos; }
+		std::vector<geom::AttribInfo>		  &getAttribs() { return mAttribInfos; }
 		const std::vector<geom::AttribInfo> &getAttribs() const { return mAttribInfos; }
 		//! Clears all attributes in the Layout
-		void clearAttribs() { mAttribInfos.clear(); }
+		void								 clearAttribs() { mAttribInfos.clear(); }
 
-		//uint32_t getStride() const;
+		bool hasAttrib( geom::Attrib attrib ) const;
 
 	protected:
 		//! If \a resultVbo is null then no VBO is allocated
@@ -45,21 +45,26 @@ public:
 		bool						  mInterleave;
 		std::vector<geom::AttribInfo> mAttribInfos;
 
-		friend class BufferedMesh;
+		friend class vk::BufferedMesh;
 	};
 
+	//! Creates a BufferedMesh which represents the geom::Source \a source using 1 or more BufferedMesh::Layouts for vertex data.
+	static vk::BufferedMeshRef create( const geom::Source &source, const std::vector<vk::BufferedMesh::Layout> &layouts, vk::DeviceRef device = nullptr );
+	//! Creates a BufferedMesh which represents the geom::Source \a source using \a layout.
+	static vk::BufferedMeshRef create( const geom::Source &source, const vk::BufferedMesh::Layout &layout, vk::DeviceRef device = nullptr );
+
 	////! Creates a VboMesh which represents the geom::Source \a source. Layout is derived from the contents of \a source.
-	//static BufferedMeshRef create( const geom::Source &source, vk::DeviceRef device = vk::DeviceRef() );
+	// static BufferedMeshRef create( const geom::Source &source, vk::DeviceRef device = vk::DeviceRef() );
 	//! Creates a VboMesh which represents the geom::Source \a source using \a layout.
-	static BufferedMeshRef create( const geom::Source &source, const geom::AttribSet &requestedAttribs, vk::DeviceRef device = vk::DeviceRef() );
+	//static vk::BufferedMeshRef create( const geom::Source &source, const geom::AttribSet &requestedAttribs, vk::DeviceRef device = nullptr );
 	//! Creates a VboMesh which represents the geom::Source \a source using 1 or more VboMesh::Layouts for vertex data.
-	static BufferedMeshRef create( const geom::Source &source, const std::vector<BufferedMesh::Layout> &vertexBufferLayouts, vk::DeviceRef device = vk::DeviceRef() );
+	// static vk::BufferedMeshRef create( const geom::Source &source, const std::vector<BufferedMesh::Layout> &vertexBufferLayouts, vk::DeviceRef device = nullptr );
 	////! Creates a VboMesh which represents the geom::Source \a source using 1 or more Vbo/VboMesh::Layout pairs. A null VboRef requests allocation.
-	//static BufferedMeshRef create( const geom::Source &source, const std::vector<std::pair<BufferedMesh::Layout, vk::BufferRef>> &vertexBuffers, vk::BufferRef indexBuffer = vk::BufferRef() );
+	// static BufferedMeshRef create( const geom::Source &source, const std::vector<std::pair<BufferedMesh::Layout, vk::BufferRef>> &vertexBuffers, vk::BufferRef indexBuffer = vk::BufferRef() );
 	////! Creates a VboMesh which represents the user's vertex buffer objects. Allows optional \a indexVbo to enable indexed vertices; creates a static index VBO if none provided.
-	//static BufferedMeshRef create( uint32_t numVertices, const std::vector<std::pair<geom::BufferLayout, vk::BufferRef>> &vertexBuffers, uint32_t numIndices = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT16, vk::BufferRef indexBuffer = vk::BufferRef() );
+	// static BufferedMeshRef create( uint32_t numVertices, const std::vector<std::pair<geom::BufferLayout, vk::BufferRef>> &vertexBuffers, uint32_t numIndices = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT16, vk::BufferRef indexBuffer = vk::BufferRef() );
 	////! Creates a VboMesh which represents the user's vertex buffer objects. Allows optional \a indexVbo to enable indexed vertices; creates a static index VBO if none provided.
-	//static BufferedMeshRef create( uint32_t numVertices, const std::vector<Layout> &vertexBuffers, uint32_t numIndices = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT16, vk::BufferRef indexBuffer = vk::BufferRef() );
+	// static BufferedMeshRef create( uint32_t numVertices, const std::vector<Layout> &vertexBuffers, uint32_t numIndices = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT16, vk::BufferRef indexBuffer = vk::BufferRef() );
 
 	//! Returns the number of vertices in the mesh
 	uint32_t getNumVertices() const { return mNumVertices; }

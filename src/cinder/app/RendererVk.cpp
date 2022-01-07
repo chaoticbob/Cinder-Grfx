@@ -15,7 +15,7 @@
 
 namespace cinder::app {
 
-static RendererVk *		 sMainRenderer				  = nullptr;
+static RendererVk		  *sMainRenderer				  = nullptr;
 thread_local RendererVk *RendererVk::sCurrentRenderer = nullptr;
 
 struct RendererVk::Frame
@@ -128,7 +128,7 @@ void RendererVk::setup( WindowImplMsw *windowImpl, RendererRef sharedRenderer )
 	// Create context
 	{
 		vk::Context::Options options = vk::Context::Options()
-										   .setRenderTarget( mSwapchain->getSurfaceFormat().format )
+										   .setRenderTargets( { mSwapchain->getSurfaceFormat().format } )
 										   .sampleCount( mOptions.getMsaa() );
 
 		mContext = vk::Context::create(
@@ -203,7 +203,7 @@ void RendererVk::makeCurrentContext( bool force )
 
 	// Frame data
 	const uint32_t contextFrameIndex = mContext->getFrameIndex();
-	Frame &		   frame			 = mFrames[contextFrameIndex];
+	Frame		  &frame			 = mFrames[contextFrameIndex];
 
 	// Waits for frame's work to complete (i.e. present work)
 	std::vector<vk::Context::SemaphoreInfo> waits;
@@ -246,7 +246,7 @@ void RendererVk::swapBuffers()
 	}
 
 	// Current renderer frame
-	Frame &				frame		   = mFrames[contextFrameIndex];
+	Frame			  &frame		   = mFrames[contextFrameIndex];
 	const vk::ImageRef &swapchainImage = acquireInfo.image;
 
 	// Build commnad buffer to copy context render target to swapchain

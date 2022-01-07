@@ -579,7 +579,7 @@ ShaderProgRef ShaderProg::create(
 
 vk::ShaderProgRef ShaderProg::create(
 	vk::DeviceRef		  device,
-	const DataSourceRef & vertOrCompSpirvDataSource,
+	const DataSourceRef	&vertOrCompSpirvDataSource,
 	VkShaderStageFlagBits shaderStage )
 {
 	std::vector<char> spirv;
@@ -667,7 +667,7 @@ ShaderProg::ShaderProg(
 
 ShaderProg::ShaderProg(
 	vk::DeviceRef		  device,
-	std::vector<char> &&  vsOrCsSpirv,
+	std::vector<char>	  &&vsOrCsSpirv,
 	VkShaderStageFlagBits shaderStage )
 {
 }
@@ -713,11 +713,11 @@ const uint32_t kSpirvBoundOffset	   = 3;
 const uint32_t kSprivStartingWordIndex = 5;
 
 static void removeRelaxedPrecision(
-	std::vector<char> *								  spirv,
-	spv_reflect::ShaderModule &						  reflection,
+	std::vector<char>								*spirv,
+	spv_reflect::ShaderModule						  &reflection,
 	const std::vector<SpvReflectInterfaceVariable *> &targetVars )
 {
-	uint32_t *	   pWords		  = reinterpret_cast<uint32_t *>( spirv->data() );
+	uint32_t		 *pWords		  = reinterpret_cast<uint32_t *>( spirv->data() );
 	const uint32_t totalWordCount = static_cast<uint32_t>( spirv->size() / kSpirvWordSize );
 
 	// Get a list of <op word index, op word count> for instructions to remove
@@ -748,7 +748,7 @@ static void removeRelaxedPrecision(
 	const size_t n = removeInfo.size();
 	for ( size_t i = 0; i < n; ++i ) {
 		const size_t j	   = n - i - 1;
-		auto &		 info  = removeInfo[j];
+		auto		 &info  = removeInfo[j];
 		auto		 first = spirv->begin() + ( info.first * kSpirvWordSize );
 		auto		 last  = first + ( info.second * kSpirvWordSize );
 		spirv->erase( first, last );
@@ -796,7 +796,7 @@ static void alignInterfaceVariables(
 				throw VulkanExc( "interface variable alignment failed: input variable must have name" );
 			}
 			for ( size_t j = 0; j < outVars.size(); ++j ) {
-				auto &		outVar	= outVars[j];
+				auto		 &outVar	= outVars[j];
 				std::string outName = ( outVar->name != nullptr ) ? outVar->name : "";
 				// Skip if name doesn't match
 				if ( inName != outName ) {
@@ -816,7 +816,7 @@ static void alignInterfaceVariables(
 
 	if ( changed ) {
 		const size_t sizeInBytes = inReflection.GetCodeSize();
-		const char * pCode		 = reinterpret_cast<const char *>( inReflection.GetCode() );
+		const char  *pCode		 = reinterpret_cast<const char *>( inReflection.GetCode() );
 		*inStage				 = std::vector<char>( pCode, pCode + sizeInBytes );
 	}
 
@@ -911,6 +911,8 @@ void ShaderProg::parseModules()
 	parseDscriptorBindings( mHs.get() );
 	parseDscriptorBindings( mCs.get() );
 
+	mUniformBlocks.clear();
+	mDefaultUniformBlock = nullptr;
 	parseUniformBlocks( mVs.get() );
 	parseUniformBlocks( mPs.get() );
 	parseUniformBlocks( mGs.get() );
@@ -921,6 +923,9 @@ void ShaderProg::parseModules()
 
 void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
 {
+	mSetBindings.clear();
+	mDescriptorBindings.clear();
+
 	if ( shader == nullptr ) {
 		return;
 	}
@@ -930,15 +935,15 @@ void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
 	for ( const auto &binding : descriptorBindings ) {
 		// Get reference to bindings vector
 		const uint32_t setNumber = binding.getSet();
-		auto &		   bindings	 = mDescriptorSetBindings[setNumber];
+		auto			 &bindings	 = mSetBindings[setNumber];
 		// Look binding using binding number
-		auto it = std::find_if(
-			bindings.begin(),
-			bindings.end(),
-			[binding]( const vk::DescriptorBinding &elem ) -> bool {
-				bool isMatchBinding = ( elem.getBinding() == binding.getBinding() );
-				return isMatchBinding;
-			} );
+		auto		   it		 = std::find_if(
+			 bindings.begin(),
+			 bindings.end(),
+			 [binding]( const vk::DescriptorBinding &elem ) -> bool {
+				 bool isMatchBinding = ( elem.getBinding() == binding.getBinding() );
+				 return isMatchBinding;
+			 } );
 		// Add if the binding if not match is found
 		if ( it == bindings.end() ) {
 			bindings.push_back( binding );
@@ -950,6 +955,27 @@ void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
 				ss << "descriptor type mismatch where binding=" << binding.getBinding() << ", set=" << binding.getSet();
 				throw VulkanExc( ss.str() );
 			}
+		}
+	}
+
+	for ( auto setIt : mSetBindings ) {
+		for ( auto &binding : setIt.second ) {
+			// Unnamed bindings will be a problem later for uniform() calls
+			if ( binding.getName().empty() ) {
+				std::stringstream ss;
+				ss << "unnamed binding: " << binding.getSet() << "." << binding.getBinding();
+				throw VulkanExc( ss.str() );
+			}
+			// Check for duplicate names
+			auto it = mDescriptorBindings.find( binding.getName() );
+			if ( it != mDescriptorBindings.end() ) {
+				std::stringstream ss;
+				ss << "duplicate binding name: " << binding.getSet() << "." << binding.getBinding();
+				ss << " and " << ( *it ).second->getSet() << "." << ( *it ).second->getBinding();
+				throw VulkanExc( ss.str() );
+			}
+			// Add binding
+			mDescriptorBindings[binding.getName()] = &binding;
 		}
 	}
 }
@@ -1029,6 +1055,37 @@ const std::vector<vk::InterfaceVariable> &ShaderProg::getVertexAttributes() cons
 	return mVs ? mVs->getVertexAttributes() : mNullVariables;
 }
 
+void ShaderProg::uniform( const std::string &name, int data ) const
+{
+	// Check bindings first
+	bool descriptorFound = false;
+	{
+		auto it = mDescriptorBindings.find( name );
+		if ( it != mDescriptorBindings.end() ) {
+			const uint32_t binding = static_cast<uint32_t>( data + CINDER_CONTEXT_BINDING_SHIFT_TEXTURE );
+
+			bool isSameType	   = ( it->second->getType() != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER );
+			bool isSameBinding = ( binding != it->second->getBinding() );
+			descriptorFound	   = ( isSameType && isSameBinding );
+
+			if ( !descriptorFound ) {
+				if ( !isSameType ) {
+					CI_LOG_E( name << " is not a texture resource" );
+				}
+				else {
+					if ( !isSameBinding ) {
+						CI_LOG_E( "binding mismatch for " << name << ", expected " << it->second->getBinding() << " got " << data );
+					}
+				}
+			}
+		}
+	}
+
+	// Check
+	if ( !descriptorFound ) {
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GlslProg
 
@@ -1102,7 +1159,7 @@ vk::GlslProgRef GlslProg::create(
 
 GlslProg::GlslProg(
 	vk::DeviceRef		  device,
-	std::vector<char> &&  vsOrCsSpirv,
+	std::vector<char>	  &&vsOrCsSpirv,
 	VkShaderStageFlagBits shaderStage )
 	: vk::ShaderProg( device, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
 {
@@ -1305,7 +1362,7 @@ std::vector<char> GlslProg::compileShader(
 	glslang_shader_delete( shader );
 
 	const size_t sizeInBytes = glslang_program_SPIRV_get_size( program ) * sizeof( uint32_t );
-	const char * pSpirvCode	 = reinterpret_cast<const char *>( glslang_program_SPIRV_get_ptr( program ) );
+	const char  *pSpirvCode	 = reinterpret_cast<const char *>( glslang_program_SPIRV_get_ptr( program ) );
 
 	///*
 	std::stringstream ss;
@@ -1321,7 +1378,7 @@ std::vector<char> GlslProg::compileShader(
 	}
 	//*/
 
-	//vk::ShaderModuleRef shaderModule = vk::ShaderModule::create( sizeInBytes, pSpirvCode, device );
+	// vk::ShaderModuleRef shaderModule = vk::ShaderModule::create( sizeInBytes, pSpirvCode, device );
 	auto spirv = std::vector<char>( pSpirvCode, pSpirvCode + sizeInBytes );
 
 	glslang_program_delete( program );
@@ -1402,7 +1459,7 @@ vk::HlslProgRef HlslProg::create(
 
 HlslProg::HlslProg(
 	vk::DeviceRef		  device,
-	std::vector<char> &&  vsOrCsSpirv,
+	std::vector<char>	  &&vsOrCsSpirv,
 	VkShaderStageFlagBits shaderStage )
 	: vk::ShaderProg( device, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
 {
@@ -1431,9 +1488,9 @@ HlslProg::~HlslProg()
 
 std::vector<char> HlslProg::compileShader(
 	vk::DeviceRef			  device,
-	const std::string &		  text,
+	const std::string		  &text,
 	VkShaderStageFlagBits	  shaderStage,
-	const std::string &		  entryPointName,
+	const std::string		  &entryPointName,
 	vk::HlslProg::ShaderModel shaderModel )
 {
 	if ( text.empty() ) {
@@ -1502,6 +1559,7 @@ std::vector<char> HlslProg::compileShader(
 	std::vector<LPCWSTR> arguments = {
 		(LPCWSTR)kSpirvArg.c_str(),
 		(LPCWSTR)kSpirvReflectArg.c_str(),
+		L"-fvk-auto-shift-bindings",
 		L"-fvk-t-shift", (LPCWSTR)kShiftTArg.c_str(), L"0",
 		L"-fvk-b-shift", (LPCWSTR)kShiftBArg.c_str(), L"0",
 		L"-fvk-s-shift", (LPCWSTR)kShiftSArg.c_str(), L"0",
@@ -1510,7 +1568,7 @@ std::vector<char> HlslProg::compileShader(
 	// clang-format on
 
 	std::vector<std::pair<std::u16string, std::u16string>> defineNameValues;
-	//for ( XgiU32 i = 0; i < numDefines; ++i ) {
+	// for ( XgiU32 i = 0; i < numDefines; ++i ) {
 	//	xgi::String				 s		= pDefines[i];
 	//	xgi::Vector<xgi::String> tokens = xgi::SplitString( s, xgi::String( "=" ) );
 	//	xgi::WString			 key;
@@ -1523,15 +1581,15 @@ std::vector<char> HlslProg::compileShader(
 	//		key = StringToWString( tokens[0] );
 	//	}
 	//	defineNameValues.emplace_back( std::make_pair( key, value ) );
-	//}
+	// }
 
 	std::vector<DxcDefine> defines;
-	//for ( auto &elem : defineNameValues ) {
+	// for ( auto &elem : defineNameValues ) {
 	//	DxcDefine define = {};
 	//	define.Name		 = elem.first.c_str();
 	//	define.Value	 = elem.second.empty() ? nullptr : elem.second.c_str();
 	//	defines.push_back( define );
-	//}
+	// }
 
 	ComPtr<IDxcCompiler> compiler;
 	hr = DxcCreateInstance( CLSID_DxcCompiler, __uuidof( IDxcCompiler ), (void **)&compiler );

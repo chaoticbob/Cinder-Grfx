@@ -20,7 +20,7 @@ struct CI_API SpirvBytecode
 		return static_cast<const char *>( code );
 	}
 
-	const char* end() const
+	const char *end() const
 	{
 		return begin() + sizeInBytes;
 	}
@@ -36,11 +36,11 @@ struct CI_API InterfaceVariable
 	//! Returns a const reference of the name as defined in the Vertex Shader.
 	const std::string &getName() const { return mName; }
 	//! Returns the Vertex Shader generated or user defined location of this attribute.
-	uint32_t getLocation() const { return mLocation; }
+	uint32_t		   getLocation() const { return mLocation; }
 	//! Returns the GLenum representation of the type of this attribute (for example, \c GL_FLOAT_VEC3)
-	VkFormat getFormat() const { return mFormat; }
+	VkFormat		   getFormat() const { return mFormat; }
 	//! Returns the defined geom::Attrib semantic.
-	geom::Attrib getSemantic() const { return mSemantic; }
+	geom::Attrib	   getSemantic() const { return mSemantic; }
 
 private:
 	std::string	 mName;
@@ -83,8 +83,11 @@ VkPrimitiveTopology toVkPrimitive( geom::Primitive value );
 //! Returns VkFormat for attribInfo
 VkFormat toVkFormat( const geom::AttribInfo &attribInfo );
 
-//! Returns size of format
+//! Returns size in bytes of format
 uint32_t formatSize( VkFormat format );
+
+//! Returns the number of components of format
+uint32_t formatComponentCount( VkFormat format );
 
 // Determines the image aspect mask for format
 VkImageAspectFlags determineAspectMask( VkFormat format );

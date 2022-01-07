@@ -10,11 +10,11 @@ namespace cinder::vk {
 
 ImageRef Image::create(
 	VkImageType			imageType,
-	const VkExtent3D &	extent,
+	const VkExtent3D	 &extent,
 	VkFormat			format,
 	const Image::Usage &imageUsage,
 	MemoryUsage			memoryUsage,
-	const Options &		options,
+	const Options	  &options,
 	vk::DeviceRef		device )
 {
 	if ( !device ) {
@@ -27,10 +27,10 @@ ImageRef Image::create(
 ImageRef Image::create(
 	VkImage				imageHandle,
 	VkImageType			imageType,
-	const VkExtent3D &	extent,
+	const VkExtent3D	 &extent,
 	VkFormat			format,
 	const Image::Usage &imageUsage,
-	const Options &		options,
+	const Options	  &options,
 	vk::DeviceRef		device )
 {
 	if ( !device ) {
@@ -44,14 +44,15 @@ Image::Image(
 	vk::DeviceRef		device,
 	VkImage				imageHandle,
 	VkImageType			imageType,
-	const VkExtent3D &	extent,
+	const VkExtent3D	 &extent,
 	VkFormat			format,
 	const Image::Usage &imageUsage,
 	MemoryUsage			memoryUsage,
-	const Options &		options )
+	const Options	  &options )
 	: vk::DeviceChildObject( device ),
 	  mImageHandle( imageHandle ),
 	  mDisposeImage( imageHandle == VK_NULL_HANDLE ),
+	  mCreateFlags( options.mCreateFlags ),
 	  mImageType( imageType ),
 	  mFormat( format ),
 	  mExtent( extent ),
@@ -72,17 +73,22 @@ Image::Image(
 		mSliceStride = mExtent.width * mRowStride;
 	}
 
-	switch ( mImageType ) {
-		default: break;
-		case VK_IMAGE_TYPE_1D: mViewType = VK_IMAGE_VIEW_TYPE_1D; break;
-		case VK_IMAGE_TYPE_2D: mViewType = VK_IMAGE_VIEW_TYPE_2D; break;
-		case VK_IMAGE_TYPE_3D: mViewType = VK_IMAGE_VIEW_TYPE_3D; break;
+	if ( mCreateFlags & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT ) {
+		mViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+	}
+	else {
+		switch ( mImageType ) {
+			default: break;
+			case VK_IMAGE_TYPE_1D: mViewType = VK_IMAGE_VIEW_TYPE_1D; break;
+			case VK_IMAGE_TYPE_2D: mViewType = VK_IMAGE_VIEW_TYPE_2D; break;
+			case VK_IMAGE_TYPE_3D: mViewType = VK_IMAGE_VIEW_TYPE_3D; break;
+		}
 	}
 
 	if ( mImageHandle == VK_NULL_HANDLE ) {
 		VkImageCreateInfo vkci	   = { VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
 		vkci.pNext				   = nullptr;
-		vkci.flags				   = 0;
+		vkci.flags				   = mCreateFlags;
 		vkci.imageType			   = mImageType;
 		vkci.format				   = mFormat;
 		vkci.extent				   = extent;
@@ -320,7 +326,7 @@ ImageView::~ImageView()
 {
 	if ( ( mImageViewHandle != VK_NULL_HANDLE ) && mDisposeImageViewHandle ) {
 		CI_VK_DEVICE_FN( DestroyImageView( getDeviceHandle(), mImageViewHandle, nullptr ) );
-		mImageViewHandle = VK_NULL_HANDLE;
+		mImageViewHandle		= VK_NULL_HANDLE;
 		mDisposeImageViewHandle = false;
 	}
 }

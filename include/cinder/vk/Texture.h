@@ -18,8 +18,6 @@ class TextureBase
 	: public vk::DeviceChildObject
 {
 public:
-	virtual ~TextureBase();
-
 	struct Format
 	{
 		Format() {}
@@ -87,8 +85,21 @@ public:
 		friend class Texturebase;
 	};
 
-	vk::ImageRef   getImage() const { return mImage; }
-	vk::SamplerRef getSampler() const { return mSampler; }
+	virtual ~TextureBase();
+
+	uint32_t getWidth() const { return mExtent.width; }
+	uint32_t getHeight() const { return mExtent.height; }
+	uint32_t getDepth() const { return mExtent.depth; }
+
+	VkFormat				  getImageFormat() const { return mImageFormat; }
+	VkImageType				  getImageType() const { return mImageType; }
+	const VkComponentMapping &getComponentMapping() const { return mComponentMapping; }
+
+	const vk::Image		*getImage() const { return mImage.get(); }
+	const vk::Sampler	  *getSampler() const { return mSampler.get(); }
+	const vk::ImageView *getSampledImageView() const { return mSampledImage.get(); }
+	const vk::ImageView *getStorageIamgeView() const { return mStorageImage.get(); }
+	const vk::ImageView *getOutputTargetView() const { return mOutputTarget.get(); }
 
 	virtual void bind( uint32_t binding = 0 ) = 0;
 	void		 unbind( uint32_t binding );
@@ -98,8 +109,9 @@ protected:
 	TextureBase( vk::DeviceRef device, uint32_t width, uint32_t height );
 	TextureBase( vk::DeviceRef device, uint32_t width, uint32_t height, uint32_t depth );
 
-	void initImage( VkFormat imageFormat, const Format &format );
-	void initSampler( const Format &format );
+	void		 initImage( VkImageCreateFlags createFlags, VkFormat imageFormat, const Format &format );
+	void		 initSampler( const Format &format );
+	virtual void initViews() = 0;
 
 protected:
 	VkExtent3D		   mExtent		= {};
@@ -109,21 +121,17 @@ protected:
 	vk::ImageRef	   mImage;
 	vk::SamplerRef	   mSampler;
 	bool			   mDisposeSampler = false;
+
+	vk::ImageViewRef mSampledImage;
+	vk::ImageViewRef mStorageImage;
+	vk::ImageViewRef mOutputTarget; // Color or depth/stencil attachments
 };
 
-//class CI_API Texture1d
-//	: public TextureBaseVk
-//{
-//public:
-//	virtual ~Texture1d();
-//
-//	struct Format : public TextureBaseVk::Format
-//	{
-//	};
-//};
-
+//! @class Texture2d
+//!
+//!
 class Texture2d
-	: public TextureBase
+	: public vk::TextureBase
 {
 public:
 	virtual ~Texture2d();
@@ -135,30 +143,30 @@ public:
 		Format& arrayLayers( uint32_t numLayers = CINDER_REMAINING_MIP_LEVELS ) { TextureBase::Format::arrayLayers(numLayers); return *this; }
 		// clang-format on
 
-	protected:
+	private:
 		std::function<void( Texture2d * )> mDeleter;
 
 		friend Texture2d;
 	};
 
 	//! Constructs a texture of size(\a width, \a height) and allocates storage.
-	static Texture2dRef create( int width, int height, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( int width, int height, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	//! Constructs a texture of size(\a width, \a height). Pixel data is provided by \a data in format \a dataFormat (Ex: \c GL_RGB, \c GL_RGBA). Use \a format.setDataType() to specify a dataType other than \c GL_UNSIGNED_CHAR. Ignores \a format.loadTopDown().
-	static Texture2dRef create( const void *data, VkFormat dataFormat, int width, int height, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( const void *data, VkFormat dataFormat, int width, int height, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	//! Constructs a Texture based on the contents of \a surface.
-	static Texture2dRef create( const Surface8u &surface, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( const Surface8u &surface, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	//! Constructs a Texture based on the contents of \a channel. Sets swizzle mask to {R,R,R,1} where supported unless otherwise specified in \a format.
-	static Texture2dRef create( const Channel8u &channel, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( const Channel8u &channel, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	//! Constructs a Texture based on the contents of \a surface.
-	static Texture2dRef create( const Surface16u &surface, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( const Surface16u &surface, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	//! Constructs a Texture based on the contents of \a channel. Sets swizzle mask to {R,R,R,1} where supported unless otherwise specified in \a format.
-	static Texture2dRef create( const Channel16u &channel, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( const Channel16u &channel, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	//! Constructs a Texture based on the contents of \a surface.
-	static Texture2dRef create( const Surface32f &surface, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( const Surface32f &surface, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	/** \brief Constructs a texture based on the contents of \a channel. A default value of -1 for \a internalFormat chooses an appropriate internal format automatically. **/
-	static Texture2dRef create( const Channel32f &channel, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( const Channel32f &channel, const Format &format = Format(), vk::DeviceRef device = nullptr );
 	//! Constructs a Texture based on \a imageSource. A default value of -1 for \a internalFormat chooses an appropriate internal format based on the contents of \a imageSource. Uses a Format's intermediate PBO when available, which is resized as necessary.
-	static Texture2dRef create( ImageSourceRef imageSource, const Format &format = Format(), vk::DeviceRef device = vk::DeviceRef() );
+	static Texture2dRef create( ImageSourceRef imageSource, const Format &format = Format(), vk::DeviceRef device = nullptr );
 
 	// @TODO: Implement these
 	/*
@@ -169,9 +177,6 @@ public:
 	//! Constructs a Texture from a DDS file.
 	static Texture2dRef createFromDds( const DataSourceRef &dataSource, const Format &format = Format() );
 */
-
-	int32_t getWidth() const { return mCleanBounds.getWidth(); }
-	int32_t getHeight() const { return mCleanBounds.getHeight(); }
 
 	virtual void bind( uint32_t binding = 0 ) override;
 
@@ -186,30 +191,49 @@ protected:
 	Texture2d( vk::DeviceRef device, const Channel32f &channel, Format format = Format() );
 	Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, Format format = Format() );
 
-	void initViews();
+	virtual void initViews() override;
 
 private:
-	Texture2d::Format mFormat;
-	vk::ImageViewRef  mSampledImage;
-	vk::ImageViewRef  mStorageImage;
-	vk::ImageViewRef  mOutputTarget; // Color or depth/stencil
-
 	ivec2 mActualSize;	// true texture size in pixels, as opposed to clean bounds
 	Area  mCleanBounds; // relative to upper-left origin regardless of top-down
 };
 
-//class CI_API Texture3d
-//	: public TextureBaseVk
-//{
-//protected:
-//	Texture3d( cinder::app::RendererVk *pRenderer, uint32_t width, uint32_t height, uint32_t depth );
-//
-//public:
-//	virtual ~Texture3d();
-//
-//	struct Format : public TextureBaseVk::Format
-//	{
-//	};
-//};
+//! @class TextureCubeMap
+//!
+//!
+class CI_API TextureCubeMap
+	: public vk::TextureBase
+{
+public:
+	struct Format : public vk::TextureBase::Format
+	{
+		Format() { arrayLayers( 6 ); }
+
+		// clang-format off
+		Format& mipmap( uint32_t numLevels = CINDER_REMAINING_MIP_LEVELS ) { TextureBase::Format::mipmap(numLevels); return *this; }
+		// clang-format on
+
+	private:
+		std::function<void( TextureCubeMap * )> mDeleter;
+
+		friend TextureCubeMap;
+	};
+
+	~TextureCubeMap();
+
+	//! Automatically infers Horizontal Cross, Vertical Cross, Row, or Column based on image aspect ratio
+	static vk::TextureCubeMapRef create( const ImageSourceRef &imageSource, const Format &format = Format(), vk::DeviceRef device = nullptr );
+
+	virtual void bind( uint32_t binding = 0 ) override;
+
+private:
+	template <typename T>
+	TextureCubeMap( vk::DeviceRef device, const SurfaceT<T> images[6], Format format );
+
+	template <typename T>
+	static TextureCubeMapRef createTextureCubeMapImpl( const ImageSourceRef &imageSource, const Format &format, vk::DeviceRef device );
+
+	virtual void initViews() override;
+};
 
 } // namespace cinder::vk

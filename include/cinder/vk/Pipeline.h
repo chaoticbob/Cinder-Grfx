@@ -95,12 +95,12 @@ public:
 
 	struct InputAssemblyState
 	{
-		uint32_t				   attributeCount						= 0;
-		Attribute				   attributes[CINDER_MAX_VERTEX_INPUTS] = {};
-		VkPrimitiveTopology		   topology								= VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-		VkBool32				   primitiveRestart						= VK_FALSE;
-		VkTessellationDomainOrigin domainOrigin							= VK_TESSELLATION_DOMAIN_ORIGIN_UPPER_LEFT;
-		uint32_t				   patchControlPoints					= 0;
+		uint32_t				   attributeCount;						 // = 0;
+		Attribute				   attributes[CINDER_MAX_VERTEX_INPUTS]; // = {};
+		VkPrimitiveTopology		   topology;							 // = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+		VkBool32				   primitiveRestart;					 // = VK_FALSE;
+		VkTessellationDomainOrigin domainOrigin;						 // = VK_TESSELLATION_DOMAIN_ORIGIN_UPPER_LEFT;
+		uint32_t				   patchControlPoints;					 // = 0;
 	};
 
 	enum SampleShading : int32_t
@@ -115,77 +115,77 @@ public:
 	struct RasterizerState
 	{
 		// Rasterization
-		VkPolygonMode	polygonMode				= VK_POLYGON_MODE_FILL;
-		VkCullModeFlags cullMode				= VK_CULL_MODE_NONE;
-		VkFrontFace		frontFace				= VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		VkBool32		rasterizerDiscardEnable = VK_FALSE;
-		VkBool32		depthClipEnable			= VK_FALSE;
-		VkBool32		depthClampEnable		= VK_FALSE;
-		VkBool32		depthBiasEnable			= VK_FALSE;
+		VkPolygonMode	polygonMode;			 // = VK_POLYGON_MODE_FILL;
+		VkCullModeFlags cullMode;				 // = VK_CULL_MODE_NONE;
+		VkFrontFace		frontFace;				 // = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		VkBool32		rasterizerDiscardEnable; // = VK_FALSE;
+		VkBool32		depthClipEnable;		 // = VK_FALSE;
+		VkBool32		depthClampEnable;		 // = VK_FALSE;
+		VkBool32		depthBiasEnable;		 // = VK_FALSE;
 
 		// Multi-sample
-		VkSampleCountFlagBits rasterizationSamples	= VK_SAMPLE_COUNT_1_BIT;
-		SampleShading		  sampleShading			= SAMPLE_SHADING_OFF;
-		VkBool32			  alphaToCoverageEnable = VK_FALSE;
-		VkBool32			  alphaToOneEnable		= VK_FALSE;
+		VkSampleCountFlagBits rasterizationSamples;	 // = VK_SAMPLE_COUNT_1_BIT;
+		SampleShading		  sampleShading;		 // = SAMPLE_SHADING_OFF;
+		VkBool32			  alphaToCoverageEnable; // = VK_FALSE;
+		VkBool32			  alphaToOneEnable;		 // = VK_FALSE;
 	};
 
 	struct StencilOpParams
 	{
-		VkStencilOp failOp		= VK_STENCIL_OP_KEEP;
-		VkStencilOp passOp		= VK_STENCIL_OP_KEEP;
-		VkStencilOp depthFailOp = VK_STENCIL_OP_KEEP;
-		VkCompareOp compareOp	= VK_COMPARE_OP_NEVER;
+		VkStencilOp failOp;		 // = VK_STENCIL_OP_KEEP;
+		VkStencilOp passOp;		 // = VK_STENCIL_OP_KEEP;
+		VkStencilOp depthFailOp; // = VK_STENCIL_OP_KEEP;
+		VkCompareOp compareOp;	 // = VK_COMPARE_OP_NEVER;
 	};
 
 	struct DepthStencilState
 	{
-		VkBool32		depthTestEnable		  = VK_FALSE;
-		VkBool32		depthWriteEnable	  = VK_FALSE;
-		VkCompareOp		depthCompareOp		  = VK_COMPARE_OP_NEVER;
-		VkBool32		depthBoundsTestEnable = VK_FALSE;
-		VkBool32		stencilTestEnable	  = VK_FALSE;
-		uint32_t		stencilReadMask		  = CINDER_DEFAULT_STENCIL_READ_MASK;
-		uint32_t		stencilWriteMask	  = CINDER_DEFAULT_STENCIL_WRITE_MASK;
-		uint32_t		stencilReference	  = CINDER_DEFAULT_STENCIL_REFERENCE;
-		StencilOpParams front				  = {};
-		StencilOpParams back				  = {};
+		VkBool32		depthTestEnable;	   // = VK_FALSE;
+		VkBool32		depthWriteEnable;	   // = VK_FALSE;
+		VkCompareOp		depthCompareOp;		   // = VK_COMPARE_OP_NEVER;
+		VkBool32		depthBoundsTestEnable; // = VK_FALSE;
+		VkBool32		stencilTestEnable;	   // = VK_FALSE;
+		uint32_t		stencilReadMask;	   // = CINDER_DEFAULT_STENCIL_READ_MASK;
+		uint32_t		stencilWriteMask;	   // = CINDER_DEFAULT_STENCIL_WRITE_MASK;
+		uint32_t		stencilReference;	   // = CINDER_DEFAULT_STENCIL_REFERENCE;
+		StencilOpParams front;				   // = {};
+		StencilOpParams back;				   // = {};
 	};
 
 	struct ColorBlendAttachment
 	{
-		VkBool32			  blendEnable		  = VK_FALSE;
-		VkBlendFactor		  srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
-		VkBlendFactor		  dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
-		VkBlendOp			  colorBlendOp		  = VK_BLEND_OP_ADD;
-		VkBlendFactor		  srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-		VkBlendFactor		  dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-		VkBlendOp			  alphaBlendOp		  = VK_BLEND_OP_ADD;
-		VkColorComponentFlags colorWriteMask	  = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		VkBool32			  blendEnable;		   // = VK_FALSE;
+		VkBlendFactor		  srcColorBlendFactor; // = VK_BLEND_FACTOR_ONE;
+		VkBlendFactor		  dstColorBlendFactor; // = VK_BLEND_FACTOR_ZERO;
+		VkBlendOp			  colorBlendOp;		   // = VK_BLEND_OP_ADD;
+		VkBlendFactor		  srcAlphaBlendFactor; // = VK_BLEND_FACTOR_ONE;
+		VkBlendFactor		  dstAlphaBlendFactor; // = VK_BLEND_FACTOR_ZERO;
+		VkBlendOp			  alphaBlendOp;		   // = VK_BLEND_OP_ADD;
+		VkColorComponentFlags colorWriteMask;	   // = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
 	};
 
 	struct ColorBlendState
 	{
-		VkBool32			 logicOpEnable							= VK_FALSE;
-		VkLogicOp			 logicOp								= VK_LOGIC_OP_CLEAR;
-		uint32_t			 attachmentCount						= 0;
-		ColorBlendAttachment attachments[CINDER_MAX_RENDER_TARGETS] = { {}, {}, {}, {}, {}, {}, {}, {} };
+		VkBool32			 logicOpEnable;							 // = VK_FALSE;
+		VkLogicOp			 logicOp;								 // = VK_LOGIC_OP_CLEAR;
+		uint32_t			 attachmentCount;						 // = 0;
+		ColorBlendAttachment attachments[CINDER_MAX_RENDER_TARGETS]; // = { {}, {}, {}, {}, {}, {}, {}, {} };
 	};
 
 	struct OutputMergerState
 	{
-		uint32_t renderTargetCount						  = 0;
-		VkFormat renderTargets[CINDER_MAX_RENDER_TARGETS] = { VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED };
-		VkFormat depthStencil							  = VK_FORMAT_UNDEFINED;
+		uint32_t renderTargetCount;						   // = 0;
+		VkFormat renderTargets[CINDER_MAX_RENDER_TARGETS]; // = { VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED, VK_FORMAT_UNDEFINED };
+		VkFormat depthStencil;							   // = VK_FORMAT_UNDEFINED;
 	};
 
-	// GraphicsPipelineState encapsulates a subset of fields
+	// GraphicsPipelineCreateInfo encapsulates a set of fields
 	// that is later used for graphics pipeline creation and
 	// application level pipeline caching. The caching uses
-	// xxHash to hash shader binraries and the graphics pipeline
-	// state. The cost of hashing + lookup is faster than
-	// going through a full pipeline creation. In order for
-	// the lookup to be effective, the hashing has to be
+	// xxHash to hash shader pointers, pipeline layout, and
+	// graphics states. The cost of hashing + lookup is faster
+	// than going through a full pipeline creation. In order
+	// for the lookup to be effective, the hashing has to be
 	// deterministic. Meaning that for input data that's the
 	// same, the xxHash output is always the same. Below are
 	// requirements for any struct that is must be a member
@@ -211,79 +211,88 @@ public:
 	// The padding can contain random values and this of course
 	// would make the hashing non-deterministic.
 	//
-	struct GraphicsPipelineState
+	struct GraphicsPipelineCreateInfo
 	{
-		InputAssemblyState ia = {};
-		RasterizerState	   rs = {};
-		DepthStencilState  ds = {};
-		ColorBlendState	   cb = {};
-		OutputMergerState  om = {};
+		const vk::ShaderModule *vert;			// = nullptr;
+		const vk::ShaderModule *frag;			// = nullptr;
+		const vk::ShaderModule *geom;			// = nullptr;
+		const vk::ShaderModule *tese;			// = nullptr;
+		const vk::ShaderModule *tesc;			// = nullptr;
+		vk::PipelineLayout	   *pipelineLayout; // = nullptr;
+		InputAssemblyState		ia;				// = {};
+		RasterizerState			rs;				// = {};
+		DepthStencilState		ds;				// = {};
+		ColorBlendState			cb;				// = {};
+		OutputMergerState		om;				// = {};
 	};
 
-	struct Options
-	{
-		Options() {}
-		Options( const GraphicsPipelineState &gs );
-
-		// clang-format off
-		/*
-		Options& attributeFormat(uint32_t index, VkFormat format);
-		Options& attributeLocation(uint32_t index, uint32_t location);
-		Options& attributeBinding(uint32_t index, uint32_t binding);
-		Options& attribute(uint32_t index, const Attribute& attr);
-		Options& depthTest(bool value = true) { mGraphicsState.depthStencilState.depthTestEnable = value; return *this; }
-		Options& depthWrite(bool value = true) { mGraphicsState.depthStencilState.depthWriteEnable = value; return *this; }
-		Options& addRenderTarget(VkFormat format);
-		Options& setDepthStencil(VkFormat format) { mGraphicsState.outputState.depthStencil = format; return *this; }
-		*/
-		// clang-format on
-
-	private:
-		GraphicsPipelineState mGraphicsState = {};
-		friend Pipeline;
-	};
-
+	// struct Options
+	//{
+	//	Options() {}
+	//	Options( const GraphicsPipelineState &gs );
+	//
+	//	// clang-format off
+	//	/*
+	//	Options& attributeFormat(uint32_t index, VkFormat format);
+	//	Options& attributeLocation(uint32_t index, uint32_t location);
+	//	Options& attributeBinding(uint32_t index, uint32_t binding);
+	//	Options& attribute(uint32_t index, const Attribute& attr);
+	//	Options& depthTest(bool value = true) { mGraphicsState.depthStencilState.depthTestEnable = value; return *this; }
+	//	Options& depthWrite(bool value = true) { mGraphicsState.depthStencilState.depthWriteEnable = value; return *this; }
+	//	Options& addRenderTarget(VkFormat format);
+	//	Options& setDepthStencil(VkFormat format) { mGraphicsState.outputState.depthStencil = format; return *this; }
+	//	*/
+	//	// clang-format on
+	//
+	// private:
+	//	GraphicsPipelineState mGraphicsState = {};
+	//	friend Pipeline;
+	// };
+	//
 	virtual ~Pipeline();
 
-	static PipelineRef create( ShaderProgRef shaderProg, PipelineLayoutRef pipelineLayout, Options &options = Options(), DeviceRef device = DeviceRef() );
+	static void setDefaults( GraphicsPipelineCreateInfo *createInfo );
+
+	static vk::PipelineRef create( const GraphicsPipelineCreateInfo &createInfo, vk::DeviceRef device = nullptr );
+
+	static uint64_t calculateHash( const GraphicsPipelineCreateInfo *createInfo );
 
 	VkPipeline getPipelineHandle() const { return mPipelineHandle; }
 
 private:
-	Pipeline( DeviceRef device, ShaderProgRef shaderProg, PipelineLayoutRef pipelineLayout, Options &options );
-	void initComputePipeline( ShaderProgRef shaderProg, PipelineLayoutRef pipelineLayout );
-	void initGraphicsPipeline( ShaderProgRef shaderProg, PipelineLayoutRef pipelineLayout, Options &options );
+	Pipeline( vk::DeviceRef device, const GraphicsPipelineCreateInfo &createInfo );
 
 	void initShaderStages(
-		ShaderProgRef								  shaderProg,
-		const Options &								  options,
+		const GraphicsPipelineCreateInfo			 &createInfo,
 		std::vector<VkPipelineShaderStageCreateInfo> &shaderStages );
 	void initVertexInput(
-		const Options &									options,
+		const GraphicsPipelineCreateInfo				 &createInfo,
 		std::vector<VkVertexInputAttributeDescription> &vertexAttributes,
-		std::vector<VkVertexInputBindingDescription> &	vertexBindings,
-		VkPipelineVertexInputStateCreateInfo &			stateCreateInfo );
+		std::vector<VkVertexInputBindingDescription>	 &vertexBindings,
+		VkPipelineVertexInputStateCreateInfo			 &stateCreateInfo );
 	void initPrimitiveTopology(
-		const Options &										  options,
-		VkPipelineInputAssemblyStateCreateInfo &			  inputAssemblyStateCreateInfo,
+		const GraphicsPipelineCreateInfo					 &createInfo,
+		VkPipelineInputAssemblyStateCreateInfo			   &inputAssemblyStateCreateInfo,
 		VkPipelineTessellationDomainOriginStateCreateInfoKHR &domainOriginStateCreateInfo,
-		VkPipelineTessellationStateCreateInfo &				  tessellationStateCreateInfo );
+		VkPipelineTessellationStateCreateInfo				  &tessellationStateCreateInfo );
 	void initRasterizer(
-		const Options &										options,
+		const GraphicsPipelineCreateInfo					 &createInfo,
 		VkPipelineRasterizationDepthClipStateCreateInfoEXT &depthClipStateCreateInfo,
-		VkPipelineRasterizationStateCreateInfo &			rasterizationStateCreateInfo,
-		VkPipelineMultisampleStateCreateInfo &				multisampleStateCreateInfo );
+		VkPipelineRasterizationStateCreateInfo			   &rasterizationStateCreateInfo,
+		VkPipelineMultisampleStateCreateInfo				 &multisampleStateCreateInfo );
 	void initDepthStencil(
-		const Options &						   options,
+		const GraphicsPipelineCreateInfo		 &createInfo,
 		VkPipelineDepthStencilStateCreateInfo &stateCreateInfo );
 	void initColorBlend(
-		const Options &									  options,
+		const GraphicsPipelineCreateInfo				 &createInfo,
 		std::vector<VkPipelineColorBlendAttachmentState> &vkAttachments,
-		VkPipelineColorBlendStateCreateInfo &			  stateCreateInfo );
+		VkPipelineColorBlendStateCreateInfo				&stateCreateInfo );
 	void initDynamicState(
-		const Options &					  options,
-		std::vector<VkDynamicState> &	  dynamicStates,
+		const GraphicsPipelineCreateInfo &createInfo,
+		std::vector<VkDynamicState>		&dynamicStates,
 		VkPipelineDynamicStateCreateInfo &stateCreateInfo );
+
+	void initGraphicsPipeline( const GraphicsPipelineCreateInfo &createInfo );
 
 private:
 	VkPipeline mPipelineHandle = VK_NULL_HANDLE;
@@ -299,9 +308,7 @@ public:
 	PipelineManager( vk::DeviceRef device );
 	~PipelineManager();
 
-	vk::PipelineRef CompilePipeline(
-		vk::ShaderProgRef		 shaderProg,
-		const Pipeline::Options &options );
+	vk::PipelineRef CompilePipeline( const vk::Pipeline::GraphicsPipelineCreateInfo &createInfo );
 };
 
 } // namespace cinder::vk

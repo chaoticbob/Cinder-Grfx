@@ -117,7 +117,7 @@ vk::SamplerRef Device::SamplerCache::createSampler( const vk::SamplerHashKey &ke
 
 struct ExtensionFeatures
 {
-	void *											 pNextStart			   = nullptr;
+	void											*pNextStart			   = nullptr;
 	VkPhysicalDeviceDescriptorIndexingFeaturesEXT	 descriptorIndexing	   = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT };
 	VkPhysicalDeviceExtendedDynamicStateFeaturesEXT	 extendedDynamciState  = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT };
 	VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamciState2 = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT };
@@ -150,7 +150,7 @@ struct ExtensionFeatures
 static void configureExtensions(
 	uint32_t				   apiVersion,
 	VkPhysicalDevice		   gpuHandle,
-	const Device::Options &	   options,
+	const Device::Options	  &options,
 	std::vector<const char *> &extensions )
 {
 	// Required extensions for Vulkan 1.1
@@ -169,7 +169,7 @@ static void configureExtensions(
 		extensions.push_back( VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME );
 		extensions.push_back( VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME );
-		//extensions.push_back( VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
+		// extensions.push_back( VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME );
 		extensions.push_back( VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME );
 	}
@@ -938,7 +938,7 @@ void Device::internalCopyToImage(
 	vk::Buffer *pSrcBuffer,
 	uint32_t	dstMipLevel,
 	uint32_t	dstArrayLayer,
-	vk::Image * pDstImage )
+	vk::Image  *pDstImage )
 {
 	VkImageAspectFlags aspectMask = pDstImage->getAspectMask();
 
@@ -952,7 +952,7 @@ void Device::internalCopyToImage(
 		throw VulkanFnFailedExc( "vkBeginCommandBuffer", vkres );
 	}
 
-	const uint32_t dstNumMipLevels = pDstImage->getMipLevels();
+	const uint32_t dstNumMipLevels	 = pDstImage->getMipLevels();
 	const uint32_t dstNumArrayLayers = pDstImage->getArrayLayers();
 
 	// Transition image layout to VK_IMAGE_LAYOUT_TRANSFER_DST
@@ -1032,7 +1032,7 @@ void Device::copyToImage(
 	const void *pSrcData,
 	uint32_t	dstMipLevel,
 	uint32_t	dstArrayLayer,
-	vk::Image * pDstImage )
+	vk::Image  *pDstImage )
 {
 	std::lock_guard<std::mutex> lock( mCopyMutex );
 	initializeStagingBuffer();
@@ -1095,11 +1095,9 @@ void *Device::beginCopyToImage(
 	uint32_t dstHeight	 = pDstImage->getExtent().height;
 	uint32_t dstRowBytes = pDstImage->getRowStride();
 
-	for ( uint32_t i = 0; i < dstMipLevel; ++i ) {
-		dstWidth >>= 1;
-		dstHeight >>= 1;
-		dstRowBytes >>= 1;
-	}
+	dstWidth >>= dstMipLevel;
+	dstHeight >>= dstMipLevel;
+	dstRowBytes >>= dstMipLevel;
 
 	bool isWidthSame	= ( srcWidth == dstWidth );
 	bool isHeightSame	= ( srcHeight == dstHeight );

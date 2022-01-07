@@ -44,6 +44,7 @@ public:
 		Options() {}
 
 		// clang-format off
+		Options& createFlags(VkImageCreateFlags flags ) { mCreateFlags = flags; return *this; }
 		Options& samples(VkSampleCountFlagBits value) { mSamples = value; return *this; }
 		Options& mipLevels(uint32_t value) { mMipLevels = value; return *this; }
 		Options& arrayLayers(uint32_t value) { mArrayLayers = value; return *this; }
@@ -51,6 +52,7 @@ public:
 		// clang-format on
 
 	private:
+		VkImageCreateFlags	  mCreateFlags = 0;
 		VkSampleCountFlagBits mSamples	   = VK_SAMPLE_COUNT_1_BIT;
 		uint32_t			  mMipLevels   = 1;
 		uint32_t			  mArrayLayers = 1;
@@ -64,21 +66,21 @@ public:
 	//! Create an image with commited memory allocation
 	static ImageRef create(
 		VkImageType			imageType,
-		const VkExtent3D &	extent,
+		const VkExtent3D	 &extent,
 		VkFormat			format,
 		const Image::Usage &imageUsage,
 		MemoryUsage			memoryUsage,
-		const Options &		options = Options(),
+		const Options	  &options = Options(),
 		vk::DeviceRef		device	= vk::DeviceRef() );
 
 	//! Create an image using external image handle
 	static ImageRef create(
 		VkImage				imageHandle,
 		VkImageType			imageType,
-		const VkExtent3D &	extent,
+		const VkExtent3D	 &extent,
 		VkFormat			format,
 		const Image::Usage &imageUsage,
-		const Options &		options = Options(),
+		const Options	  &options = Options(),
 		vk::DeviceRef		device	= vk::DeviceRef() );
 
 	//! Create 1D image with committed memory allocation
@@ -87,7 +89,7 @@ public:
 		VkFormat			format,
 		const Image::Usage &imageUsage,
 		MemoryUsage			memoryUsage,
-		const Options &		options = Options(),
+		const Options	  &options = Options(),
 		vk::DeviceRef		device	= vk::DeviceRef() )
 	{
 		return Image::create( VK_IMAGE_TYPE_1D, { width, 1, 1 }, format, imageUsage, memoryUsage, options, device );
@@ -100,7 +102,7 @@ public:
 		VkFormat			format,
 		const Image::Usage &imageUsage,
 		MemoryUsage			memoryUsage,
-		const Options &		options = Options(),
+		const Options	  &options = Options(),
 		vk::DeviceRef		device	= vk::DeviceRef() )
 	{
 		return Image::create( VK_IMAGE_TYPE_2D, { width, height, 1 }, format, imageUsage, memoryUsage, options, device );
@@ -114,13 +116,15 @@ public:
 		VkFormat			format,
 		const Image::Usage &imageUsage,
 		MemoryUsage			memoryUsage,
-		const Options &		options = Options(),
+		const Options	  &options = Options(),
 		vk::DeviceRef		device	= vk::DeviceRef() )
 	{
 		return Image::create( VK_IMAGE_TYPE_3D, { width, height, depth }, format, imageUsage, memoryUsage, options, device );
 	}
 
 	VkImage getImageHandle() const { return mImageHandle; }
+
+	VkImageCreateFlags getCreateFlags() const { return mCreateFlags; }
 
 	VkImageType getImageType() const { return mImageType; }
 
@@ -150,20 +154,23 @@ public:
 
 	uint32_t getSliceStride() const { return mSliceStride; }
 
+	bool getCubeMap() const { return mCubeMap; }
+
 private:
 	Image(
 		vk::DeviceRef		device,
 		VkImage				imageHandle,
 		VkImageType			imageType,
-		const VkExtent3D &	extent,
+		const VkExtent3D	 &extent,
 		VkFormat			format,
 		const Image::Usage &imageUsage,
 		MemoryUsage			memoryUsage,
-		const Options &		options );
+		const Options	  &options );
 
 private:
 	VkImage				  mImageHandle	  = VK_NULL_HANDLE;
 	bool				  mDisposeImage	  = false;
+	VkImageCreateFlags	  mCreateFlags	  = 0;
 	VkImageType			  mImageType	  = grfx::invalidValue<VkImageType>();
 	VkImageViewType		  mViewType		  = grfx::invalidValue<VkImageViewType>();
 	VkFormat			  mFormat		  = VK_FORMAT_UNDEFINED;
@@ -177,11 +184,12 @@ private:
 	MemoryUsage			  mMemoryUsage	  = MemoryUsage::GPU_ONLY;
 	VmaAllocation		  mAllocation	  = VK_NULL_HANDLE;
 	VmaAllocationInfo	  mAllocationinfo = {};
-	void *				  mMappedAddress  = nullptr;
+	void				 *mMappedAddress  = nullptr;
 	VkImageAspectFlags	  mAspectMask	  = 0;
 	uint32_t			  mPixelStride	  = 0;
 	uint32_t			  mRowStride	  = 0;
 	uint32_t			  mSliceStride	  = 0;
+	bool				  mCubeMap		  = false;
 };
 
 using ImageViewRef = std::shared_ptr<class ImageView>;

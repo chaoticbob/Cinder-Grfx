@@ -93,6 +93,11 @@ public:
 	void bindIndexBuffer( vk::BufferRef &buffer, uint32_t offset, VkIndexType indexType );
 	void bindVertexBuffers( uint32_t firstBinding, const std::vector<vk::BufferRef> &buffers, std::vector<uint64_t> offsets = {} );
 
+	void setCullMode( VkCullModeFlags cullMode );
+	void setDepthTestEnable( bool depthTestEnable );
+	void setDepthWriteEnable( bool depthWriteEnable );
+	void setFrontFace( VkFrontFace frontFace );
+
 	void draw( uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance );
 	void drawIndexed( uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance );
 

@@ -13,7 +13,7 @@ struct FormatInfo
 };
 
 // clang-format off
-const std::map<VkFormat, FormatInfo> kFormatInfo = {
+static const std::map<VkFormat, FormatInfo> kFormatInfo = {
     {VK_FORMAT_UNDEFINED,                   { 0, 0}},
     {VK_FORMAT_R4G4_UNORM_PACK8,            { 1, 2}},
     {VK_FORMAT_R4G4B4A4_UNORM_PACK16,       { 2, 4}},
@@ -352,6 +352,12 @@ uint32_t formatSize( VkFormat format )
 {
 	auto it = kFormatInfo.find( format );
 	return ( it != kFormatInfo.end() ) ? it->second.size : 0;
+}
+
+uint32_t formatComponentCount( VkFormat format )
+{
+	auto it = kFormatInfo.find( format );
+	return ( it != kFormatInfo.end() ) ? it->second.componentCount : 0;
 }
 
 VkImageAspectFlags determineAspectMask( VkFormat format )

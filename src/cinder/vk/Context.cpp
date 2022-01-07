@@ -9,20 +9,100 @@
 #include "cinder/vk/Sampler.h"
 #include "cinder/vk/ShaderProg.h"
 #include "cinder/vk/Sync.h"
+#include "cinder/vk/Texture.h"
 #include "cinder/vk/UniformBlock.h"
 #include "cinder/vk/Util.h"
 #include "cinder/vk/wrapper.h"
 #include "cinder/app/App.h"
 #include "cinder/app/RendererVk.h"
+#include "cinder/Log.h"
 
 namespace cinder::vk {
 
 static Context *sCurrentContext = nullptr;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
+// Context::Frame
+
+/*
+void Context::Frame::resetDefaultUniformBuffers()
+{
+	uint32_t n = countU32( defaultUniformBuffers );
+	for ( uint32_t i = 0; i < n; ++i ) {
+		auto &elem = defaultUniformBuffers[i];
+		elem.first = 0;
+	}
+}
+
+void Context::Frame::nextDefaultUniformBuffer()
+{
+	currentDefaultUniformBuffer = nullptr;
+
+	uint32_t n = countU32( defaultUniformBuffers );
+	for ( uint32_t i = 0; i < n; ++i ) {
+		auto &elem = defaultUniformBuffers[i];
+		if ( elem.first == 0 ) {
+			currentDefaultUniformBuffer = elem.second.get();
+		}
+	}
+
+	if ( currentDefaultUniformBuffer == nullptr ) {
+		vk::Buffer::Usage usage = vk::Buffer::Usage().uniformBuffer();
+
+		uint32_t flags				= 1;
+		auto	 buffer				= vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, commandBuffer->getDevice() );
+		currentDefaultUniformBuffer = buffer.get();
+
+		defaultUniformBuffers.push_back( std::make_pair( flags, buffer ) );
+	}
+}
+*/
+
+void Context::Frame::resetDrawCalls()
+{
+	uint32_t n = countU32( drawCalls );
+	for ( uint32_t i = 0; i < n; ++i ) {
+		auto &elem	= drawCalls[i];
+		elem->inUse = false;
+	}
+}
+
+void Context::Frame::nextDrawCall( const vk::DescriptorSetLayoutRef &defaultSetLayout )
+{
+	currentDrawCall = nullptr;
+
+	uint32_t n = countU32( drawCalls );
+	for ( uint32_t i = 0; i < n; ++i ) {
+		auto &elem = drawCalls[i];
+		if ( elem->inUse == false ) {
+			currentDrawCall		   = elem.get();
+			currentDrawCall->inUse = true;
+			break;
+		}
+	}
+
+	if ( currentDrawCall == nullptr ) {
+		auto drawCall = std::make_unique<DrawCall>();
+
+		drawCall->descriptorSet = vk::DescriptorSet::create( descriptorPool, defaultSetLayout );
+
+		vk::Buffer::Usage usage		   = vk::Buffer::Usage().uniformBuffer();
+		drawCall->defaultUniformBuffer = vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, commandBuffer->getDevice() );
+
+		currentDrawCall		   = drawCall.get();
+		currentDrawCall->inUse = true;
+
+		drawCalls.push_back( std::move( drawCall ) );
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
 // Context::Options
+
 Context::Options::Options( VkFormat renderTargetFormat, VkFormat depthStencilFormat, uint32_t samples )
-	: mRenderTargetFormat( renderTargetFormat ), mDepthFormat( depthStencilFormat ), mSampleCount( toVkSampleCount( samples ) )
+	: mRenderTargetFormats( { renderTargetFormat } ),
+	  mDepthStencilFormat( depthStencilFormat ),
+	  mSampleCount( toVkSampleCount( samples ) )
 {
 }
 
@@ -39,23 +119,32 @@ Context::DescriptorState::DescriptorState()
 {
 }
 
-void Context::DescriptorState::bindUniformBuffer( uint32_t bindingNumber, vk::Buffer *buffer )
+void Context::DescriptorState::bindUniformBuffer( uint32_t bindingNumber, const vk::Buffer *buffer )
 {
-	//Descriptor &descriptor		 = mSets[setNumber][bindingNumber];
-	//descriptor.type				 = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	//descriptor.bufferInfo.buffer = buffer;
+	// Descriptor &descriptor		 = mSets[setNumber][bindingNumber];
+	// descriptor.type				 = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	// descriptor.bufferInfo.buffer = buffer;
 
 	mDescriptors.insert_or_assign( bindingNumber, Descriptor( bindingNumber, buffer ) );
 }
 
-void Context::DescriptorState::bindCombinedImageSampler( uint32_t bindingNumber, vk::ImageView *imageView, vk::Sampler *sampler )
+void Context::DescriptorState::bindCombinedImageSampler( uint32_t bindingNumber, const vk::ImageView *imageView, const vk::Sampler *sampler )
 {
-	//Descriptor &descriptor		   = mSets[setNumber][bindingNumber];
-	//descriptor.type				   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	//descriptor.imageInfo.imageView = imageView;
-	//descriptor.imageInfo.sampler   = sampler;
+	// Descriptor &descriptor		   = mSets[setNumber][bindingNumber];
+	// descriptor.type				   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	// descriptor.imageInfo.imageView = imageView;
+	// descriptor.imageInfo.sampler   = sampler;
 
-	mDescriptors.insert_or_assign( bindingNumber, Descriptor( bindingNumber, imageView, sampler ) );
+	bool bind = true;
+	auto it	  = mDescriptors.find( bindingNumber );
+	if ( it != mDescriptors.end() ) {
+		auto &descriptor = it->second;
+		bind			 = ( descriptor.imageInfo.imageView != imageView ) || ( descriptor.imageInfo.sampler != sampler );
+	}
+
+	if ( bind ) {
+		mDescriptors.insert_or_assign( bindingNumber, Descriptor( bindingNumber, imageView, sampler ) );
+	}
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,17 +178,45 @@ Context::Context( vk::DeviceRef device, uint32_t width, uint32_t height, const O
 	  mNumFramesInFlight( options.mNumInFlightFrames ),
 	  mWidth( width ),
 	  mHeight( height ),
-	  mDepthFormat( options.mDepthFormat ),
-	  mStencilFormat( options.mStencilFormat ),
+	  mRenderTargetFormats( options.mRenderTargetFormats ),
+	  mDepthStencilFormat( options.mDepthStencilFormat ),
 	  mSampleCount( options.mSampleCount )
 {
-	mRenderTargetFormats.push_back( options.mRenderTargetFormat );
-	std::copy( options.mAdditionalRenderTargets.begin(), options.mAdditionalRenderTargets.end(), std::back_inserter( mRenderTargetFormats ) );
-
-	mCombinedDepthStencil = ( mDepthFormat != VK_FORMAT_UNDEFINED ) && ( mDepthFormat == mStencilFormat );
-
 	initializeDescriptorSetLayouts();
 	initializePipelineLayout();
+
+	// Set default graphics state values
+	vk::Pipeline::setDefaults( &mGraphicsState );
+
+	// Set context's initial values for graphics state
+	{
+		mGraphicsState.pipelineLayout = mDefaultPipelineLayout.get();
+
+		// IA
+		mGraphicsState.ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+		// RS
+		mGraphicsState.rs.rasterizationSamples = options.mSampleCount;
+
+		// DS
+		mGraphicsState.ds.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+
+		uint32_t renderTargetCount = countU32( mRenderTargetFormats );
+		renderTargetCount		   = std::min<uint32_t>( renderTargetCount, CINDER_MAX_RENDER_TARGETS );
+
+		// CB
+		mGraphicsState.cb.attachmentCount = renderTargetCount;
+
+		// OM
+		mGraphicsState.om.renderTargetCount = renderTargetCount;
+		for ( uint32_t i = 0; i < renderTargetCount; ++i ) {
+			mGraphicsState.om.renderTargets[i] = mRenderTargetFormats[i];
+		}
+		mGraphicsState.om.depthStencil = mDepthStencilFormat;
+	}
+
+	// Hash graphics pipeline state
+	mCurrentGraphicsPipelineHash = vk::Pipeline::calculateHash( &mGraphicsState );
 
 	// Command pool and command buffers
 	std::vector<vk::CommandBufferRef> commandBuffers;
@@ -156,27 +273,34 @@ void Context::initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame 
 {
 	frame.commandBuffer = commandBuffer;
 
-	// Descriptor stuff
-	{
-		vk::DescriptorPool::Options options = vk::DescriptorPool::Options()
-												  .addCombinedImageSampler( CINDER_CONTEXT_MAX_TEXTURE_COUNT )
-												  .addUniformBuffer( CINDER_CONTEXT_MAX_UBO_COUNT );
-		frame.descriptorPool = vk::DescriptorPool::create( options, getDevice() );
+	vk::DescriptorPool::Options options = vk::DescriptorPool::Options()
+											  .addCombinedImageSampler( 10 * CINDER_CONTEXT_MAX_TEXTURE_COUNT )
+											  .addUniformBuffer( 10 * CINDER_CONTEXT_MAX_UBO_COUNT );
+	frame.descriptorPool = vk::DescriptorPool::create( options, getDevice() );
+	/*
+		// Descriptor stuff
+		{
+			vk::DescriptorPool::Options options = vk::DescriptorPool::Options()
+													  .addCombinedImageSampler( CINDER_CONTEXT_MAX_TEXTURE_COUNT )
+													  .addUniformBuffer( CINDER_CONTEXT_MAX_UBO_COUNT );
+			frame.descriptorPool = vk::DescriptorPool::create( options, getDevice() );
 
-		frame.descriptorSet = vk::DescriptorSet::create( frame.descriptorPool, mDefaultSetLayout );
-	}
+			frame.descriptorSet = vk::DescriptorSet::create( frame.descriptorPool, mDefaultSetLayout );
+		}
 
-	// Default uniform buffer
-	{
-		vk::Buffer::Usage usage = vk::Buffer::Usage().uniformBuffer();
+		// Default uniform buffer
+		{
 
-		frame.defaultUniformBuffer = vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, getDevice() );
-	}
+			vk::Buffer::Usage usage = vk::Buffer::Usage().uniformBuffer();
 
-	uint32_t numRenderTargets = countU32( mRenderTargetFormats );
-	frame.renderTargets.resize( numRenderTargets );
-	frame.rtvs.resize( numRenderTargets );
-	for ( uint32_t i = 0; i < numRenderTargets; ++i ) {
+			frame.defaultUniformBuffer = vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, getDevice() );
+		}
+	*/
+
+	uint32_t renderTargetCount = countU32( mRenderTargetFormats );
+	frame.renderTargets.resize( renderTargetCount );
+	frame.rtvs.resize( renderTargetCount );
+	for ( uint32_t i = 0; i < renderTargetCount; ++i ) {
 		vk::Image::Usage   usage   = vk::Image::Usage().renderTarget().sampledImage();
 		vk::Image::Options options = vk::Image::Options().samples( mSampleCount );
 		frame.renderTargets[i]	   = vk::Image::create( mWidth, mHeight, mRenderTargetFormats[i], usage, vk::MemoryUsage::GPU_ONLY, options, getDevice() );
@@ -184,31 +308,72 @@ void Context::initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame 
 		frame.rtvs[i] = vk::ImageView::create( frame.renderTargets[i], getDevice() );
 	}
 
-	if ( mCombinedDepthStencil ) {
-		if ( mDepthFormat != VK_FORMAT_UNDEFINED ) {
-			vk::Image::Usage   usage   = vk::Image::Usage().depthStencil().sampledImage();
-			vk::Image::Options options = vk::Image::Options().samples( mSampleCount );
-			frame.depthTarget		   = vk::Image::create( mWidth, mHeight, mDepthFormat, usage, vk::MemoryUsage::GPU_ONLY, options, getDevice() );
+	if ( mDepthStencilFormat != VK_FORMAT_UNDEFINED ) {
+		vk::Image::Usage   usage   = vk::Image::Usage().depthStencil().sampledImage();
+		vk::Image::Options options = vk::Image::Options().samples( mSampleCount );
+		frame.depthStencil		   = vk::Image::create( mWidth, mHeight, mDepthStencilFormat, usage, vk::MemoryUsage::GPU_ONLY, options, getDevice() );
 
-			frame.dtv = vk::ImageView::create( frame.depthTarget, getDevice() );
+		frame.dsv = vk::ImageView::create( frame.depthStencil, getDevice() );
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+// Templated stack management routines
+
+template <typename T>
+bool Context::pushStackState( std::vector<T> &stack, T value )
+{
+	bool needsToBeSet = true;
+	if ( ( !stack.empty() ) && ( stack.back() == value ) ) {
+		needsToBeSet = false;
+	}
+	stack.push_back( value );
+	return needsToBeSet;
+}
+
+template <typename T>
+bool Context::popStackState( std::vector<T> &stack )
+{
+	if ( !stack.empty() ) {
+		T prevValue = stack.back();
+		stack.pop_back();
+		if ( !stack.empty() ) {
+			return stack.back() != prevValue;
+		}
+		else {
+			return true;
 		}
 	}
 	else {
-		if ( mDepthFormat != VK_FORMAT_UNDEFINED ) {
-			vk::Image::Usage   usage   = vk::Image::Usage().depthStencil().sampledImage();
-			vk::Image::Options options = vk::Image::Options().samples( mSampleCount );
-			frame.depthTarget		   = vk::Image::create( mWidth, mHeight, mDepthFormat, usage, vk::MemoryUsage::GPU_ONLY, options, getDevice() );
+		return true;
+	}
+}
 
-			frame.dtv = vk::ImageView::create( frame.depthTarget, getDevice() );
-		}
+template <typename T>
+bool Context::setStackState( std::vector<T> &stack, T value )
+{
+	bool needsToBeSet = true;
+	if ( ( !stack.empty() ) && ( stack.back() == value ) ) {
+		needsToBeSet = false;
+	}
+	else if ( stack.empty() ) {
+		stack.push_back( value );
+	}
+	else {
+		stack.back() = value;
+	}
+	return needsToBeSet;
+}
 
-		if ( mStencilFormat != VK_FORMAT_UNDEFINED ) {
-			vk::Image::Usage   usage   = vk::Image::Usage().depthStencil().sampledImage();
-			vk::Image::Options options = vk::Image::Options().samples( mSampleCount );
-			frame.stencilTarget		   = vk::Image::create( mWidth, mHeight, mStencilFormat, usage, vk::MemoryUsage::GPU_ONLY, options, getDevice() );
-
-			frame.stv = vk::ImageView::create( frame.stencilTarget, getDevice() );
-		}
+template <typename T>
+bool Context::getStackState( std::vector<T> &stack, T *result )
+{
+	if ( stack.empty() ) {
+		return false;
+	}
+	else {
+		*result = stack.back();
+		return true;
 	}
 }
 
@@ -247,16 +412,22 @@ void Context::makeCurrent( const std::vector<SemaphoreInfo> &externalWaits )
 	// Get current frame
 	Frame &frame = getCurrentFrame();
 
+	// Reset draw calls
+	frame.resetDrawCalls();
+	frame.nextDrawCall( mDefaultSetLayout );
+
 	// Start command buffer recording if it's not already started
 	if ( !frame.commandBuffer->isRecording() ) {
 		frame.commandBuffer->begin();
 
 		frame.commandBuffer->setViewport( 0, 0, static_cast<float>( mWidth ), static_cast<float>( mHeight ) );
 		frame.commandBuffer->setScissor( 0, 0, mWidth, mHeight );
+
+		setDynamicStates( true );
 	}
 	// Start rendering if it's not already started
 	if ( !frame.commandBuffer->isRendering() ) {
-		vk::CommandBuffer::RenderingInfo ri = vk::CommandBuffer::RenderingInfo( frame.rtvs, frame.dtv );
+		vk::CommandBuffer::RenderingInfo ri = vk::CommandBuffer::RenderingInfo( frame.rtvs, frame.dsv );
 		frame.commandBuffer->beginRendering( ri );
 	}
 }
@@ -329,13 +500,13 @@ void Context::waitForCompletion()
 
 std::pair<ivec2, ivec2> Context::getViewport()
 {
-	//if( mViewportStack.empty() ) {
+	// if( mViewportStack.empty() ) {
 	//	GLint params[4];
 	//	glGetIntegerv( GL_VIEWPORT, params );
 	//	// push twice in anticipation of later pop
 	//	mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
 	//	mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
-	//}
+	// }
 
 	return mViewportStack.back();
 }
@@ -344,16 +515,23 @@ void Context::bindShaderProg( vk::ShaderProgRef prog )
 {
 	mShaderProgram = prog;
 
+	mGraphicsState.vert = mShaderProgram->getVertexShader();
+	mGraphicsState.frag = mShaderProgram->getFragmentShader();
+	mGraphicsState.geom = mShaderProgram->getGeometryShader();
+	mGraphicsState.tese = mShaderProgram->getTessellationEvalShader();
+	mGraphicsState.tesc = mShaderProgram->getTessellationCtrlShader();
+
 	auto block = mShaderProgram->getDefaultUniformBlock();
 	if ( block ) {
-		mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().defaultUniformBuffer.get() );
+		// mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().defaultUniformBuffer.get() );
+		mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().currentDrawCall->defaultUniformBuffer.get() );
 	}
 }
 
-void Context::bindTexture( uint32_t binding, vk::ImageView *imageView, vk::Sampler *sampler )
+void Context::bindTexture( const vk::TextureBase *texture, uint32_t binding )
 {
 	binding += CINDER_CONTEXT_BINDING_SHIFT_TEXTURE;
-	mDescriptorState.bindCombinedImageSampler( binding, imageView, sampler );
+	mDescriptorState.bindCombinedImageSampler( binding, texture->getSampledImageView(), texture->getSampler() );
 }
 
 void Context::unbindTexture( uint32_t binding )
@@ -362,13 +540,197 @@ void Context::unbindTexture( uint32_t binding )
 	mDescriptorState.bindCombinedImageSampler( binding, nullptr, nullptr );
 }
 
+void Context::initTextureBindingStack( uint32_t binding )
+{
+	if ( mTextureBindingStack.find( binding ) == mTextureBindingStack.end() ) {
+		mTextureBindingStack[binding].push_back( nullptr );
+		mTextureBindingStack[binding].push_back( nullptr );
+	}
+}
+
+void Context::pushTextureBinding( const vk::TextureBase *texture )
+{
+	uint32_t binding = getActiveTexture();
+	pushTextureBinding( texture, binding );
+
+	// mTextureBindingStack[binding].push_back( std::make_pair( texture->getSampledImageView(), texture->getSampler() ) );
+	//  if( mTextureBindingStack.find( binding ) == mTextureBindingStack.end() ) {
+	//	mTextureBindingStack[binding].push_back( std::make_pair(texture->getSampledImageView(), texture->getSampler()));
+	//
+	//	//GLenum targetBinding = Texture::getBindingConstantForTarget( target );
+	//	//GLint queriedInt = -1;
+	//	//if( targetBinding > 0 ) {
+	//	//	ScopedActiveTexture actScp( textureUnit );
+	//	//	glGetIntegerv( targetBinding, &queriedInt );
+	//	//}
+	//	//mTextureBindingStack[textureUnit][target].push_back( queriedInt );
+	//  }
+	//  else if( mTextureBindingStack[textureUnit].find( texture ) == mTextureBindingStack[textureUnit].end() ) {
+	//	mTextureBindingStack[textureUnit][target] = std::vector<GLint>();
+	//	GLenum targetBinding = Texture::getBindingConstantForTarget( target );
+	//	GLint queriedInt = -1;
+	//	if( targetBinding > 0 ) {
+	//		ScopedActiveTexture actScp( textureUnit );
+	//		glGetIntegerv( targetBinding, &queriedInt );
+	//	}
+	//	mTextureBindingStack[textureUnit][target].push_back( queriedInt );
+	//  }
+	//
+	//  mTextureBindingStack[textureUnit][target].push_back( mTextureBindingStack[textureUnit][target].back() );
+}
+
+void Context::pushTextureBinding( const vk::TextureBase *texture, uint32_t binding )
+{
+	initTextureBindingStack( binding );
+
+	auto &stack = mTextureBindingStack[binding];
+	pushStackState( stack, texture );
+
+	bindTexture( texture, binding );
+
+	// if ( mTextureBindingStack.find( binding ) == mTextureBindingStack.end() ) {
+	//	auto nullEntry = std::make_pair<const vk::ImageView *, const vk::Sampler *>( nullptr, nullptr );
+	//	mTextureBindingStack[binding].push_back( nullEntry );
+	// }
+	// else {
+	//
+	// }
+
+	// pushTextureBinding( target, textureUnit );
+	// bindTexture( target, textureId, textureUnit );
+}
+
+void Context::popTextureBinding( uint32_t binding, bool forceRestore )
+{
+	if ( mTextureBindingStack.find( binding ) == mTextureBindingStack.end() ) {
+		CI_LOG_E( "Popping unencountered texture binding target:" << binding );
+	}
+
+	initTextureBindingStack( binding );
+
+	auto &stack = mTextureBindingStack[binding];
+	popStackState( stack );
+
+	if ( forceRestore ) {
+		auto texture = getTextureBinding( binding );
+		if ( texture ) {
+			bindTexture( texture, binding );
+		}
+		else {
+			unbindTexture( binding );
+		}
+	}
+
+	/*
+		if ( mTextureBindingStack.find( binding ) == mTextureBindingStack.end() ) {
+			mTextureBindingStack[textureUnit] = std::map<GLenum, std::vector<GLint>>();
+			CI_LOG_E( "Popping unencountered texture binding target:" << gl::constantToString( target ) );
+		}
+
+		auto cached = mTextureBindingStack[textureUnit].find( target );
+		if ( ( cached != mTextureBindingStack[textureUnit].end() ) && ( !cached->second.empty() ) ) {
+			GLint prevValue = cached->second.back();
+			cached->second.pop_back();
+			if ( !cached->second.empty() ) {
+				if ( forceRestore || ( cached->second.back() != prevValue ) ) {
+					ScopedActiveTexture actScp( textureUnit );
+					glBindTexture( target, cached->second.back() );
+				}
+			}
+		}
+	*/
+}
+
+const vk::TextureBase *Context::getTextureBinding( uint32_t binding )
+{
+	initTextureBindingStack( binding );
+	const vk::TextureBase *result = nullptr;
+	auto				  &stack  = mTextureBindingStack[binding];
+	getStackState( stack, &result );
+	return result;
+
+	/*
+		if ( mTextureBindingStack.find( textureUnit ) == mTextureBindingStack.end() )
+			mTextureBindingStack[textureUnit] = std::map<GLenum, std::vector<GLint>>();
+
+		auto cachedIt = mTextureBindingStack[textureUnit].find( target );
+		if ( ( cachedIt == mTextureBindingStack[textureUnit].end() ) || ( cachedIt->second.empty() ) || ( cachedIt->second.back() == -1 ) ) {
+			GLint  queriedInt	 = 0;
+			GLenum targetBinding = Texture::getBindingConstantForTarget( target );
+			if ( targetBinding > 0 ) {
+				ScopedActiveTexture actScp( textureUnit );
+				glGetIntegerv( targetBinding, &queriedInt );
+			}
+			else
+				return 0; // warning?
+
+			if ( mTextureBindingStack[textureUnit][target].empty() ) { // bad - empty stack; push twice to allow for the pop later and not lead to an empty stack
+				mTextureBindingStack[textureUnit][target] = vector<GLint>();
+				mTextureBindingStack[textureUnit][target].push_back( queriedInt );
+				mTextureBindingStack[textureUnit][target].push_back( queriedInt );
+			}
+			else
+				mTextureBindingStack[textureUnit][target].back() = queriedInt;
+			return (GLuint)queriedInt;
+		}
+		else
+			return (GLuint)cachedIt->second.back();
+	*/
+}
+
+//////////////////////////////////////////////////////////////////
+// ActiveTexture
+
+void Context::setActiveTexture( uint32_t binding )
+{
+	if ( setStackState<uint32_t>( mActiveTextureStack, binding ) ) {
+		// Nothing for now
+	}
+}
+
+void Context::pushActiveTexture( uint32_t binding )
+{
+	if ( pushStackState<uint32_t>( mActiveTextureStack, binding ) ) {
+		// Nothing for now
+	}
+}
+
+void Context::pushActiveTexture()
+{
+	pushStackState<uint32_t>( mActiveTextureStack, getActiveTexture() );
+}
+
+void Context::popActiveTexture( bool forceRestore )
+{
+	if ( mActiveTextureStack.empty() ) {
+		CI_LOG_E( "Active texture stack underflow" );
+	}
+	else if ( popStackState<uint32_t>( mActiveTextureStack ) || forceRestore ) {
+		// Nothing for now
+	}
+}
+
+uint32_t Context::getActiveTexture()
+{
+	if ( mActiveTextureStack.empty() ) {
+		mActiveTextureStack.push_back( 0 );
+		mActiveTextureStack.push_back( 0 );
+	}
+
+	return mActiveTextureStack.back();
+}
+
+//////////////////////////////////////////////////////////////////
+// Default shader vars
+
 void Context::setDefaultShaderVars()
 {
 	if ( !mShaderProgram ) {
 		return;
 	}
 
-	vk::Buffer *pBuffer = getCurrentFrame().defaultUniformBuffer.get();
+	// vk::Buffer *pBuffer = getCurrentFrame().defaultUniformBuffer.get();
+	vk::Buffer *pBuffer = getCurrentFrame().currentDrawCall->defaultUniformBuffer.get();
 
 	char *pMappedAddress = nullptr;
 	pBuffer->map( reinterpret_cast<void **>( &pMappedAddress ) );
@@ -376,7 +738,7 @@ void Context::setDefaultShaderVars()
 	const auto &uniforms = mShaderProgram->getDefaultUniformBlock()->getUniforms();
 	for ( const auto &uniform : uniforms ) {
 		const size_t offset = uniform.getOffset();
-		char *		 dst	= pMappedAddress + offset;
+		char		 *dst	= pMappedAddress + offset;
 
 		switch ( uniform.getUniformSemantic() ) {
 			default: break;
@@ -438,7 +800,7 @@ void Context::setDefaultShaderVars()
 				memcpy( dst + 0 * 16, src + 0 * 12, 12 );
 				memcpy( dst + 1 * 16, src + 1 * 12, 12 );
 				memcpy( dst + 2 * 16, src + 2 * 12, 12 );
-				//memcpy( dst, &normalMatrix, sizeof( normalMatrix ) );
+				// memcpy( dst, &normalMatrix, sizeof( normalMatrix ) );
 			} break;
 			case UNIFORM_VIEWPORT_MATRIX: {
 				auto viewport = vk::calcViewportMatrix();
@@ -463,7 +825,7 @@ void Context::clearColorAttachment( uint32_t index )
 {
 	VkRect2D rect = getCurrentFrame().renderTargets[index]->getArea();
 
-	const ColorA &	  value		 = mClearValues.color;
+	const ColorA	 &value		 = mClearValues.color;
 	VkClearColorValue clearValue = { value.r, value.g, value.b, value.a };
 
 	getCommandBuffer()->clearColorAttachment( index, clearValue, rect );
@@ -471,7 +833,7 @@ void Context::clearColorAttachment( uint32_t index )
 
 void Context::clearDepthStencilAttachment( VkImageAspectFlags aspectMask )
 {
-	VkRect2D rect = getCurrentFrame().depthTarget->getArea();
+	VkRect2D rect = getCurrentFrame().depthStencil->getArea();
 
 	getCommandBuffer()->clearDepthStencilAttachment( mClearValues.depth, mClearValues.stencil, rect, aspectMask );
 }
@@ -488,7 +850,7 @@ void Context::bindDefaultDescriptorSet()
 		auto &descriptor = it.second;
 
 		VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
-		write.dstSet			   = getCurrentFrame().descriptorSet->getDescriptorSetHandle();
+		write.dstSet			   = getCurrentFrame().currentDrawCall->descriptorSet->getDescriptorSetHandle();
 		write.dstBinding		   = descriptor.bindingNumber;
 		write.dstArrayElement	   = 0;
 		write.descriptorCount	   = 1;
@@ -534,7 +896,7 @@ void Context::bindDefaultDescriptorSet()
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
 		mDefaultPipelineLayout,
 		0,
-		{ getCurrentFrame().descriptorSet } );
+		{ getCurrentFrame().currentDrawCall->descriptorSet } );
 }
 
 void Context::assignVertexAttributeLocations()
@@ -553,17 +915,17 @@ void Context::assignVertexAttributeLocations()
 		const uint32_t attribCount = countU32( attribs );
 		for ( uint32_t j = 0; j < attribCount; ++j, ++vertexAttribCount ) {
 			const auto &attrib		 = attribs[j];
-			auto &		vertexAttrib = mGraphicsState.ia.attributes[vertexAttribCount];
+			auto		 &vertexAttrib = mGraphicsState.ia.attributes[vertexAttribCount];
 
 			geom::Attrib semantic = attrib.getAttrib();
 			// Find semantic in program vertex attributes
-			auto it = std::find_if(
-				programVertexAttributes.begin(),
-				programVertexAttributes.end(),
-				[semantic]( const vk::InterfaceVariable &elem ) -> bool {
-					bool isSame = ( elem.getSemantic() == semantic );
-					return isSame;
-				} );
+			auto		 it		  = std::find_if(
+				  programVertexAttributes.begin(),
+				  programVertexAttributes.end(),
+				  [semantic]( const vk::InterfaceVariable &elem ) -> bool {
+					  bool isSame = ( elem.getSemantic() == semantic );
+					  return isSame;
+				  } );
 			// Skip if shader doesn't use this attribute
 			if ( it == programVertexAttributes.end() ) {
 				continue;
@@ -571,7 +933,7 @@ void Context::assignVertexAttributeLocations()
 
 			const uint32_t location = it->getLocation();
 
-			//VkFormat format = it->getFormat();
+			// VkFormat format = it->getFormat();
 			VkFormat format = toVkFormat( attrib );
 			vertexAttrib.format( format );
 			vertexAttrib.location( location );
@@ -603,36 +965,69 @@ void Context::bindVertexBuffers( const vk::BufferedMeshRef &mesh )
 
 void Context::bindGraphicsPipeline()
 {
-	if ( !mGraphicsPipeline ) {
-		mGraphicsState.ia.topology			   = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		mGraphicsState.rs.rasterizationSamples = mSampleCount;
-		mGraphicsState.ds.depthCompareOp	   = VK_COMPARE_OP_LESS_OR_EQUAL;
-		mGraphicsState.om.renderTargetCount	   = 1;
-		mGraphicsState.om.renderTargets[0]	   = mRenderTargetFormats[0];
-		mGraphicsState.om.depthStencil		   = mDepthFormat;
-		mGraphicsState.cb.attachmentCount	   = 1;
-		mGraphicsState.cb.attachments[0]	   = {};
+	uint64_t hash = vk::Pipeline::calculateHash( &mGraphicsState );
 
-		vk::Pipeline::Options options = vk::Pipeline::Options( mGraphicsState );
-
-		mGraphicsPipeline = vk::Pipeline::create(
-			mShaderProgram,
-			mDefaultPipelineLayout,
-			options,
-			getDevice() );
+	auto it = mGraphicsPipelines.find( hash );
+	if ( it == mGraphicsPipelines.end() ) {
+		auto pipeline			 = vk::Pipeline::create( mGraphicsState, getDevice() );
+		mGraphicsPipelines[hash] = pipeline;
 	}
 
-	getCommandBuffer()->bindPipeline( VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline );
+	auto &pipeline = mGraphicsPipelines[hash];
+	getCommandBuffer()->bindPipeline( VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline );
+
+	/*
+		if ( !mGraphicsPipeline ) {
+			// mGraphicsState.ia.topology			   = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			// mGraphicsState.rs.rasterizationSamples = mSampleCount;
+			// mGraphicsState.ds.depthCompareOp	   = VK_COMPARE_OP_LESS_OR_EQUAL;
+			// mGraphicsState.om.renderTargetCount	   = 1;
+			// mGraphicsState.om.renderTargets[0]	   = mRenderTargetFormats[0];
+			// mGraphicsState.om.depthStencil		   = mDepthStencilFormat;
+			// mGraphicsState.cb.attachmentCount	   = 1;
+			// mGraphicsState.cb.attachments[0]	   = {};
+
+			mGraphicsPipeline = vk::Pipeline::create(
+				mGraphicsState,
+				getDevice() );
+		}
+
+		getCommandBuffer()->bindPipeline( VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline );
+	*/
+}
+
+void Context::setDynamicStates( bool force )
+{
+	if ( mDynamicStates.depthWrite.isDirty() || force ) {
+		getCommandBuffer()->setDepthWriteEnable( mDynamicStates.depthWrite.getValue() );
+		mDynamicStates.depthWrite.setClean();
+	}
+
+	if ( mDynamicStates.depthTest.isDirty() || force ) {
+		getCommandBuffer()->setDepthTestEnable( mDynamicStates.depthTest.getValue() );
+		mDynamicStates.depthTest.setClean();
+	}
+
+	if ( mDynamicStates.frontFace.isDirty() || force ) {
+		getCommandBuffer()->setFrontFace( mDynamicStates.frontFace.getValue() );
+		mDynamicStates.frontFace.setClean();
+	}
 }
 
 void Context::draw( int32_t firstVertex, int32_t vertexCount )
 {
+	setDynamicStates();
 	getCommandBuffer()->draw( static_cast<uint32_t>( vertexCount ), 1, static_cast<uint32_t>( firstVertex ), 0 );
+
+	getCurrentFrame().nextDrawCall( mDefaultSetLayout );
 }
 
 void Context::drawIndexed( int32_t firstIndex, int32_t indexCount )
 {
+	setDynamicStates();
 	getCommandBuffer()->drawIndexed( static_cast<uint32_t>( indexCount ), 1, static_cast<uint32_t>( firstIndex ), 0, 0 );
+
+	getCurrentFrame().nextDrawCall( mDefaultSetLayout );
 }
 
 } // namespace cinder::vk

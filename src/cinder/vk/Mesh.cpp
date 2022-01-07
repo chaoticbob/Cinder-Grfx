@@ -48,10 +48,13 @@ public:
 	//! Must be called in order to upload temporary 'mBufferData' to VBOs
 	void copyBuffers();
 
+	//! Fill out attribute with default data
+	void fillBuffer( geom::Attrib attr, size_t count );
+
 protected:
 	geom::Primitive			mPrimitive;
 	std::vector<BufferData> mBufferData;
-	vk::BufferedMesh *		mMesh;
+	vk::BufferedMesh		 *mMesh;
 };
 
 geom::Primitive BufferedMeshGeomTarget::getPrimitive() const
@@ -102,6 +105,44 @@ void BufferedMeshGeomTarget::copyAttrib( geom::Attrib attr, uint8_t dims, size_t
 
 	if ( dstData ) {
 		geom::copyData( dims, srcData, count, dstDims, dstStride, reinterpret_cast<float *>( dstData ) );
+	}
+}
+
+void BufferedMeshGeomTarget::fillBuffer( geom::Attrib attr, size_t count )
+{
+	for ( const auto &bufferData : mBufferData ) {
+		if ( bufferData.mLayout.hasAttrib( attr ) ) {
+			auto	 attrInfo = bufferData.mLayout.getAttribInfo( attr );
+			size_t	 stride	  = attrInfo.getStride();
+			size_t	 offset	  = attrInfo.getOffset();
+			uint8_t	 dims	  = attrInfo.getDims();
+			uint8_t *data	  = bufferData.mData.get() + offset;
+
+			for ( size_t i = 0; i < count; ++i ) {
+				switch ( attrInfo.getDataType() ) {
+					default: {
+						throw VulkanExc( "unhandled data type" );
+					} break;
+					case geom::FLOAT: {
+						float *values = reinterpret_cast<float *>( data );
+						if ( attr == geom::COLOR ) {
+							for ( uint8_t i = 0; i < dims; ++i ) {
+								values[i] = 1.0f;
+							}
+						}
+						else if ( attr == geom::NORMAL ) {
+							for ( uint8_t i = 0; i < dims; ++i ) {
+								values[i] = 0.0f;
+							}
+						}
+						else {
+							throw VulkanExc( "unhandled attribute type" );
+						}
+					} break;
+				}
+				data += stride;
+			}
+		}
 	}
 }
 
@@ -177,16 +218,18 @@ BufferedMesh::Layout &BufferedMesh::Layout::attrib( const geom::AttribInfo &attr
 	return *this;
 }
 
-/*
-uint32_t BufferedMesh::Layout::getStride() const
+bool BufferedMesh::Layout::hasAttrib( geom::Attrib attrib ) const
 {
-	uint32_t stride = 0;
-	for ( const auto &elem : mAttribInfos ) {
-		stride += static_cast<uint32_t>( elem.getStride() );
-	}
-	return stride;
+	auto it = std::find_if(
+		mAttribInfos.begin(),
+		mAttribInfos.end(),
+		[attrib]( const geom::AttribInfo &elem ) -> bool {
+			return elem.getAttrib() == attrib;
+		} );
+
+	bool found = ( it != mAttribInfos.end() );
+	return found;
 }
-*/
 
 void BufferedMesh::Layout::allocate( vk::DeviceRef device, size_t numVertices, geom::BufferLayout *resultBufferLayout, vk::BufferRef *resultVertexBuffer ) const
 {
@@ -232,20 +275,34 @@ void BufferedMesh::Layout::allocate( vk::DeviceRef device, size_t numVertices, g
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // BufferedMesh
 
-//BufferedMeshRef BufferedMesh::create( const geom::Source &source, vk::DeviceRef device )
-//{
-//	if ( !device ) {
-//		device = app::RendererVk::getCurrentRenderer()->getDevice();
-//	}
-//
-//	return BufferedMeshRef();
-//}
+vk::BufferedMeshRef BufferedMesh::create( const geom::Source &source, const std::vector<vk::BufferedMesh::Layout> &layouts, vk::DeviceRef device )
+{
+	if ( !device ) {
+		device = app::RendererVk::getCurrentRenderer()->getDevice();
+	}
 
+	std::vector<std::pair<vk::BufferedMesh::Layout, vk::BufferRef>> layoutVbos;
+	for ( const auto &layout : layouts ) {
+		layoutVbos.push_back( std::make_pair( layout, ( vk::BufferRef ) nullptr ) );
+	}
+
+	return vk::BufferedMeshRef( new vk::BufferedMesh( device, source, layoutVbos, nullptr ) );
+}
+
+vk::BufferedMeshRef BufferedMesh::create( const geom::Source &source, const vk::BufferedMesh::Layout &layout, vk::DeviceRef device )
+{
+	std::vector<vk::BufferedMesh::Layout> layouts = { layout };
+	return vk::BufferedMesh::create( source, layouts, device );
+}
+
+/*
 BufferedMeshRef BufferedMesh::create( const geom::Source &source, const geom::AttribSet &requestedAttribs, vk::DeviceRef device )
 {
 	if ( !device ) {
 		device = app::RendererVk::getCurrentRenderer()->getDevice();
 	}
+
+	auto &sourceAttribs = source.getAvailableAttribs();
 
 	// make an interleaved VboMesh::Layout with 'requestedAttribs'
 	vk::BufferedMesh::Layout layout;
@@ -255,25 +312,20 @@ BufferedMeshRef BufferedMesh::create( const geom::Source &source, const geom::At
 
 	return BufferedMeshRef( new BufferedMesh( device, source, { { layout, nullptr } }, nullptr ) );
 }
-
-BufferedMeshRef BufferedMesh::create( const geom::Source &source, const std::vector<BufferedMesh::Layout> &vertexBufferLayouts, vk::DeviceRef device )
-{
-	if ( !device ) {
-		device = app::RendererVk::getCurrentRenderer()->getDevice();
-	}
-
-	std::vector<std::pair<vk::BufferedMesh::Layout, vk::BufferRef>> layoutVbos;
-	for ( const auto &vertexArrayLayout : vertexBufferLayouts ) {
-		layoutVbos.push_back( std::make_pair( vertexArrayLayout, ( vk::BufferRef ) nullptr ) );
-	}
-
-	return BufferedMeshRef( new BufferedMesh( device, source, layoutVbos, nullptr ) );
-}
+*/
 
 BufferedMesh::BufferedMesh( vk::DeviceRef device, const geom::Source &source, std::vector<std::pair<vk::BufferedMesh::Layout, vk::BufferRef>> vertexBuffers, const vk::BufferRef &indexBuffer )
 	: vk::DeviceChildObject( device )
 {
-	// An empty vertexArrayBuffers implies we should just pull whatever attribs the Source is pushing. We arrived here from VboMesh::create( Source& )
+	//
+	// NOTE: Buffers must be created exactly as they're specified in the layouts.
+	//       Failure to do this could cause a mismatch with the pipeline and result
+	//       in undefined behavior.
+	//
+
+	// An empty vertexArrayBuffers implies we should just pull whatever attribs the Source is pushing.
+	// We arrived here from vk::BufferedMesh::create( const geom::Source &source ).
+	//
 	if ( vertexBuffers.empty() ) {
 		// Create an interleaved Layout based on what's in the Source
 		vertexBuffers.push_back( std::pair<Layout, vk::BufferRef>( Layout().interleave(), nullptr ) );
@@ -284,22 +336,36 @@ BufferedMesh::BufferedMesh( vk::DeviceRef device, const geom::Source &source, st
 			}
 		}
 	}
+	/*
 	else {
 		// For any attributes whose dims == 0, set the dims to be whatever dims the Source is pushing.
 		for ( auto &layoutVbo : vertexBuffers ) {
-			for ( auto &attribInfo : layoutVbo.first.getAttribs() ) {
+			auto &attribInfos = layoutVbo.first.getAttribs();
+			for ( auto &attribInfo : attribInfos ) {
 				if ( attribInfo.getDims() == 0 ) {
 					attribInfo.setDims( source.getAttribDims( attribInfo.getAttrib() ) );
 				}
 			}
 		}
 	}
+	*/
 
-	// determine the requestedAttribs by iterating all the Layouts
+	// Determine the requestedAttribs by iterating all the layouts and ONLY adding
+	// attributes that are found in the source. If attribute is not found in source
+	// add it to needsDataAttribs.
+	//
 	geom::AttribSet requestedAttribs;
+	geom::AttribSet needsDataAttribs;
 	for ( const auto &vertexArrayBuffer : vertexBuffers ) {
 		for ( const auto &attribInfo : vertexArrayBuffer.first.getAttribs() ) {
-			requestedAttribs.insert( attribInfo.getAttrib() );
+			uint8_t layoutDims = attribInfo.getDims();
+			uint8_t sourceDims = source.getAttribDims( attribInfo.getAttrib() );
+			if ( sourceDims ) {
+				requestedAttribs.insert( attribInfo.getAttrib() );
+			}
+			else {
+				needsDataAttribs.insert( attribInfo.getAttrib() );
+			}
 		}
 	}
 
@@ -316,11 +382,17 @@ BufferedMesh::BufferedMesh( vk::DeviceRef device, const geom::Source &source, st
 		mVertexBuffers.push_back( make_pair( bufferLayout, buffer ) );
 	}
 
-	// Set our indices VBO to indexArrayVBO, which may well be empty, so that the target doesn't blow it away. Must do this before we loadInto().
+	// Set our indices to indexBuffer, which may well be empty, so that the target doesn't blow it away. Must do this before we loadInto().
 	mIndices = indexBuffer;
 
+	// create target
 	BufferedMeshGeomTarget target( source.getPrimitive(), this );
+	// Load data from souce into target
 	source.loadInto( &target, requestedAttribs );
+	// Fill out attributes that need data with some default values.
+	for ( auto &attrib : needsDataAttribs ) {
+		target.fillBuffer( attrib, mNumVertices );
+	}
 	// we need to let the target know it can copy from its internal buffers to our vertexData VBOs
 	target.copyBuffers();
 

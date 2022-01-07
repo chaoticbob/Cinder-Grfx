@@ -1,13 +1,14 @@
 #include "cinder/app/App.h"
-#include "cinder/app/RendererGl.h"
+#include "cinder/app/RendererVk.h"
 #include "cinder/FileWatcher.h"	
 #include "cinder/ImageIo.h"
 #include "cinder/Log.h"
-#include "cinder/gl/gl.h"
+#include "cinder/vk/vk.h"
 
 using namespace ci;
 using namespace ci::app;
 using namespace std;
+namespace gl = ci::vk;
 
 class CubeMappingApp : public App {
   public:
@@ -33,25 +34,6 @@ void CubeMappingApp::setup()
 		CI_LOG_EXCEPTION( "error loading cube map image.", e );
 	}
 
-#if defined( CINDER_GL_ES )
-	try {
-		auto envMapGlsl = gl::GlslProg::create( loadAsset( "env_map_es2.vert" ), loadAsset( "env_map_es2.frag" ) );
-		mTeapotBatch = gl::Batch::create( geom::Teapot().subdivisions( 7 ), envMapGlsl );
-		mTeapotBatch->getGlslProg()->uniform( "uCubeMapTex", 0 );
-	}
-	catch( const std::exception& e ) {
-		CI_LOG_EXCEPTION( "Shader Failed (env_map)", e );
-	}
-
-	try {
-		auto skyBoxGlsl = gl::GlslProg::create( loadAsset( "sky_box_es2.vert" ), loadAsset( "sky_box_es2.frag" ) );
-		mSkyBoxBatch = gl::Batch::create( geom::Cube(), skyBoxGlsl );
-		mSkyBoxBatch->getGlslProg()->uniform( "uCubeMapTex", 0 );
-	}
-	catch( const std::exception& e ) {
-		CI_LOG_EXCEPTION( "Shader Failed (sky_box)", e );
-	}
-#else
 	// note: look in env_map.frag to optionally try out refraction instead of reflection.
 	fs::path envMapVert = "env_map.vert";
 	fs::path envMapFrag = "env_map.frag";
@@ -77,7 +59,6 @@ void CubeMappingApp::setup()
 	catch( const std::exception &e ) {
 		CI_LOG_EXCEPTION( "Shader Failed (sky_box)", e );
 	}
-#endif
 	
 	gl::enableDepthRead();
 	gl::enableDepthWrite();	
@@ -104,13 +85,13 @@ void CubeMappingApp::draw()
 
 	// bind the cube map for both drawing the teapot and sky box
 	gl::ScopedTextureBind scopedTexBind( mCubeMap );
-
+	
 	// draw teapot, using the cube map as an environment map
 	if( mTeapotBatch ) {
 		gl::ScopedModelMatrix modelScope;
 		gl::multModelMatrix( mObjectRotation );
 		gl::scale( vec3( 4 ) );
-
+	
 		mTeapotBatch->draw();
 	}
 	
@@ -122,4 +103,4 @@ void CubeMappingApp::draw()
 	}
 }
 
-CINDER_APP( CubeMappingApp, RendererGl( RendererGl::Options().msaa( 16 ) ) )
+CINDER_APP( CubeMappingApp, RendererVk( RendererVk::Options().msaa( 16 ).enableValidation() ) )

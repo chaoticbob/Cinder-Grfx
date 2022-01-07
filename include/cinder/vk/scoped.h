@@ -5,7 +5,8 @@
 
 namespace cinder::vk {
 
-struct CI_API ScopedModelMatrix : private Noncopyable {
+struct CI_API ScopedModelMatrix : private Noncopyable
+{
 	ScopedModelMatrix() { vk::pushModelMatrix(); }
 	explicit ScopedModelMatrix( const mat4 &m )
 	{
@@ -15,7 +16,8 @@ struct CI_API ScopedModelMatrix : private Noncopyable {
 	~ScopedModelMatrix() { vk::popModelMatrix(); }
 };
 
-struct CI_API ScopedViewMatrix : private Noncopyable {
+struct CI_API ScopedViewMatrix : private Noncopyable
+{
 	ScopedViewMatrix() { vk::pushViewMatrix(); }
 	explicit ScopedViewMatrix( const mat4 &m )
 	{
@@ -25,7 +27,8 @@ struct CI_API ScopedViewMatrix : private Noncopyable {
 	~ScopedViewMatrix() { vk::popViewMatrix(); }
 };
 
-struct CI_API ScopedProjectionMatrix : private Noncopyable {
+struct CI_API ScopedProjectionMatrix : private Noncopyable
+{
 	ScopedProjectionMatrix() { vk::pushProjectionMatrix(); }
 	explicit ScopedProjectionMatrix( const mat4 &m )
 	{
@@ -36,7 +39,8 @@ struct CI_API ScopedProjectionMatrix : private Noncopyable {
 };
 
 //! Preserves all matrices
-struct CI_API ScopedMatrices : private Noncopyable {
+struct CI_API ScopedMatrices : private Noncopyable
+{
 	ScopedMatrices() { vk::pushMatrices(); }
 	explicit ScopedMatrices( const Camera &cam )
 	{
@@ -44,6 +48,18 @@ struct CI_API ScopedMatrices : private Noncopyable {
 		vk::setMatrices( cam );
 	}
 	~ScopedMatrices() { vk::popMatrices(); }
+};
+
+struct CI_API ScopedTextureBind : private Noncopyable
+{
+	ScopedTextureBind( const vk::TextureBaseRef &texture );
+	ScopedTextureBind( const vk::TextureBaseRef &texture, uint32_t binding );
+
+	~ScopedTextureBind();
+
+private:
+	Context *mCtx;
+	uint32_t mBinding;
 };
 
 } // namespace cinder::vk

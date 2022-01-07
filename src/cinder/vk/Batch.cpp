@@ -3,6 +3,7 @@
 #include "cinder/vk/Mesh.h"
 #include "cinder/vk/wrapper.h"
 #include "cinder/app/RendererVk.h"
+#include "cinder/Log.h"
 
 namespace cinder::vk {
 
@@ -19,19 +20,76 @@ Batch::Batch( vk::DeviceRef device, const geom::Source &source, const vk::Shader
 	: vk::DeviceChildObject( device ),
 	  mShaderProg( shaderProg )
 {
+	vk::BufferedMesh::Layout layout;
+
+	// Add all attributes from the shader program.
+	//
+	const auto &shaderAttribs = shaderProg->getVertexAttributes();
+	for ( auto &attrib : shaderAttribs ) {
+		// Use the dims from the shader vertex attributes since
+		// a dim mismatch could result in data underun or overrun.
+		// If the dims between the shader and the source do not
+		// match, then BufferdMesh will generate data instead of
+		// copy it from the source. This is done to avoid a
+		// potential crash.
+		//
+		geom::Attrib semantic = attrib.getSemantic();
+		uint32_t	 dims	  = vk::formatComponentCount( attrib.getFormat() );
+		layout.attrib( semantic, dims );
+	}
+
+	// Include all the attributes in the custom attributeMapping.
+	//
+	// 'shaderProg' may not make use of these attributes but
+	// a later shader program, supplied by a replace call, might.
+	// User is responsible for ensuring that the replacing
+	// shader programs has an interface that's compatible with
+	// any attributes it uses in 'attributeMapping'.
+	//
+	for ( const auto &attrib : attributeMapping ) {
+		if ( !layout.hasAttrib( attrib.first ) ) {
+			uint8_t dims = source.getAttribDims( attrib.first );
+			if ( dims > 0 ) {
+				layout.attrib( attrib.first, dims );
+			}
+		}
+		else {
+			CI_LOG_E( "attribute mapping has overlapping attribute with shader veretx attributes" );
+		}
+	}
+
+	mMesh = vk::BufferedMesh::create( source, layout, device );
+
+/*
 	geom::AttribSet attribs;
 	// include all the attributes in the custom attributeMapping
 	for ( const auto &attrib : attributeMapping ) {
 		if ( source.getAttribDims( attrib.first ) )
 			attribs.insert( attrib.first );
 	}
-	// and then the attributes references by the GLSL
+	// and then the attributes references by the shader
 	for ( const auto &attrib : shaderProg->getVertexAttributes() ) {
-		if ( source.getAttribDims( attrib.getSemantic() ) ) {
-			attribs.insert( attrib.getSemantic() );
+		// Unlike OpenGL, Vulkan doesn't do any behind the scenes
+		// tricks to make missing attributes work. If a shader
+		// is expecting a vertex attribute, the application needs
+		// to supply data for the vertex attribute or there will
+		// be undefined behavior.
+		//
+		// In the case where the shader expects an attribute but
+		// the source does not have data for it, we'll tell
+		// BufferedMesh to generate data for it based on the
+		// semantic and warn the user.
+		//
+	
+		uint32_t dims = vk::formatComponentCount( attrib.getFormat() );
+		if ( dims == 0 ) {
+			throw VulkanExc( "FATAL: invalid format component count" );
 		}
+	
+		// attribs.insert( attrib.getSemantic() );
 	}
 	mMesh = vk::BufferedMesh::create( source, attribs );
+*/
 
 	/*
 	BufferedMesh::Layout bufferLayout = BufferedMesh::Layout();
@@ -94,11 +152,11 @@ void Batch::draw( int32_t first, int32_t count )
 	*/
 
 	if ( count < 0 ) {
-		//count = mMesh->getNumVertices();
+		// count = mMesh->getNumVertices();
 		count = mMesh->getNumIndices();
 	}
 
-	//ctx->draw( first, count );
+	// ctx->draw( first, count );
 	ctx->drawIndexed( first, count );
 }
 

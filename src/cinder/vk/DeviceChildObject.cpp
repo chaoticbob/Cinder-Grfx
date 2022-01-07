@@ -4,6 +4,9 @@
 
 namespace cinder::vk {
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// DeviceChildObject
+
 DeviceChildObject::DeviceChildObject( DeviceRef device )
 	: mDevice( device )
 {
@@ -31,6 +34,23 @@ VkPhysicalDevice DeviceChildObject::getGpuHandle() const
 VkDevice DeviceChildObject::getDeviceHandle() const
 {
 	return getDevice()->getDeviceHandle();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// ContextChildObject
+
+ContextChildObject::ContextChildObject( vk::ContextRef context )
+	: mContext( context )
+{
+}
+
+ContextChildObject::~ContextChildObject()
+{
+}
+
+vk::ContextRef ContextChildObject::getContext() const
+{
+	return mContext;
 }
 
 } // namespace cinder::vk

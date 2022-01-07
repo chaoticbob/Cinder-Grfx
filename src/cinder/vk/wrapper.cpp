@@ -305,4 +305,76 @@ mat4 calcViewportMatrix()
 	);
 }
 
+void setMatricesWindowPersp( int screenWidth, int screenHeight, float fovDegrees, float nearPlane, float farPlane, bool originUpperLeft )
+{
+	auto ctx = vk::context();
+
+	CameraPersp cam( screenWidth, screenHeight, fovDegrees, nearPlane, farPlane );
+	ctx->getModelMatrixStack().back() = mat4();
+	ctx->getProjectionMatrixStack().back() = cam.getProjectionMatrix();
+	ctx->getViewMatrixStack().back() = cam.getViewMatrix();
+	if( originUpperLeft ) {
+		ctx->getViewMatrixStack().back() *= glm::scale( vec3( 1, -1, 1 ) );								// invert Y axis so increasing Y goes down.
+		ctx->getViewMatrixStack().back() *= glm::translate( vec3( 0, (float) - screenHeight, 0 ) );		// shift origin up to upper-left corner.
+	}
+}
+
+void setMatricesWindowPersp( const ci::ivec2& screenSize, float fovDegrees, float nearPlane, float farPlane, bool originUpperLeft )
+{
+	setMatricesWindowPersp( screenSize.x, screenSize.y, fovDegrees, nearPlane, farPlane, originUpperLeft );
+}
+
+void setMatricesWindow( int screenWidth, int screenHeight, bool originUpperLeft )
+{
+	auto ctx = vk::context();
+	ctx->getModelMatrixStack().back() = mat4();
+	ctx->getViewMatrixStack().back() = mat4();
+
+	float sx = 2.0f / (float)screenWidth;
+	float sy = 2.0f / (float)screenHeight;
+	float ty = -1;
+
+	if( originUpperLeft ) {
+		sy *= -1;
+		ty *= -1;
+	}
+
+	mat4 &m = ctx->getProjectionMatrixStack().back();
+	m = mat4( sx, 0,  0, 0,
+			  0, sy,  0, 0,
+			  0,  0, -1, 0,
+			 -1, ty,  0, 1 );
+}
+
+void setMatricesWindow( const ci::ivec2& screenSize, bool originUpperLeft )
+{
+	setMatricesWindow( screenSize.x, screenSize.y, originUpperLeft );
+}
+
+void rotate( const quat &quat )
+{
+	auto ctx = vk::context();
+	ctx->getModelMatrixStack().back() *= toMat4( quat );
+}
+
+void rotate( float angleRadians, const vec3 &axis )
+{
+	if( math<float>::abs( angleRadians ) > EPSILON_VALUE ) {
+		auto ctx = vk::context();
+		ctx->getModelMatrixStack().back() *= glm::rotate( angleRadians, axis );
+	}
+}
+
+void scale( const ci::vec3& v )
+{
+	auto ctx = vk::context();
+	ctx->getModelMatrixStack().back() *= glm::scale( v );
+}
+
+void translate( const ci::vec3& v )
+{
+	auto ctx = vk::context();
+	ctx->getModelMatrixStack().back() *= glm::translate( v );
+}
+
 } // namespace cinder::vk
