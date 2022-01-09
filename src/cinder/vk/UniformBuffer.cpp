@@ -98,6 +98,21 @@ void UniformBuffer::uniform( const std::string &name, const T &value, size_t siz
 	}
 }
 
+void UniformBuffer::uniform( const std::string &name, bool value )
+{
+	uniform<uint32_t>( name, static_cast<uint32_t>( value ), sizeof( uint32_t ), 1, sizeof( uint32_t ) );
+}
+
+void UniformBuffer::uniform( const std::string &name, int32_t value )
+{
+	uniform<int32_t>( name, value, sizeof( int32_t ), 1, sizeof( int32_t ) );
+}
+
+void UniformBuffer::uniform( const std::string &name, uint32_t value )
+{
+	uniform<uint32_t>( name, value, sizeof( uint32_t ), 1, sizeof( uint32_t ) );
+}
+
 void UniformBuffer::uniform( const std::string &name, float value )
 {
 	uniform<float>( name, value, sizeof( float ), 1, sizeof( float ) );

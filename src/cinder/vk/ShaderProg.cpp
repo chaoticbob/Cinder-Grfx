@@ -936,8 +936,14 @@ void ShaderProg::parseModules()
 		vk::UniformBufferRef	   buffer  = vk::UniformBuffer::create( block, options, getContext() );
 		mUniformBuffers[name]			   = buffer;
 
-		if ((mDefaultUniformBuffer == nullptr) && (name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME) || (name == CI_VK_HLSL_GLOBALS_NAME)) {
+		if ( ( mDefaultUniformBuffer == nullptr ) && ( name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( name == CI_VK_HLSL_GLOBALS_NAME ) ) {
 			mDefaultUniformBuffer = buffer.get();
+		}
+
+		auto &uniforms = block->getUniforms();
+		for ( auto &uniform : uniforms ) {
+			auto &uniformName				 = uniform.getName();
+			mUniforNameToBuffer[uniformName] = buffer;
 		}
 	}
 }
@@ -1084,35 +1090,125 @@ const std::vector<vk::InterfaceVariable> &ShaderProg::getVertexAttributes() cons
 	return mVs ? mVs->getVertexAttributes() : mNullVariables;
 }
 
-void ShaderProg::uniform( const std::string &name, int data ) const
+// void ShaderProg::uniform( const std::string &name, int data ) const
+//{
+//	// Check bindings first
+//	bool descriptorFound = false;
+//	{
+//		auto it = mDescriptorBindings.find( name );
+//		if ( it != mDescriptorBindings.end() ) {
+//			const uint32_t binding = static_cast<uint32_t>( data + CINDER_CONTEXT_BINDING_SHIFT_TEXTURE );
+//
+//			bool isSameType	   = ( it->second->getType() != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER );
+//			bool isSameBinding = ( binding != it->second->getBinding() );
+//			descriptorFound	   = ( isSameType && isSameBinding );
+//
+//			if ( !descriptorFound ) {
+//				if ( !isSameType ) {
+//					CI_LOG_E( name << " is not a texture resource" );
+//				}
+//				else {
+//					if ( !isSameBinding ) {
+//						CI_LOG_E( "binding mismatch for " << name << ", expected " << it->second->getBinding() << " got " << data );
+//					}
+//				}
+//			}
+//		}
+//	}
+//
+//	// Check
+//	if ( !descriptorFound ) {
+//	}
+// }
+
+template <typename T>
+void ShaderProg::setUniform( const std::string &name, const T &value )
 {
-	// Check bindings first
-	bool descriptorFound = false;
-	{
-		auto it = mDescriptorBindings.find( name );
-		if ( it != mDescriptorBindings.end() ) {
-			const uint32_t binding = static_cast<uint32_t>( data + CINDER_CONTEXT_BINDING_SHIFT_TEXTURE );
-
-			bool isSameType	   = ( it->second->getType() != VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER );
-			bool isSameBinding = ( binding != it->second->getBinding() );
-			descriptorFound	   = ( isSameType && isSameBinding );
-
-			if ( !descriptorFound ) {
-				if ( !isSameType ) {
-					CI_LOG_E( name << " is not a texture resource" );
-				}
-				else {
-					if ( !isSameBinding ) {
-						CI_LOG_E( "binding mismatch for " << name << ", expected " << it->second->getBinding() << " got " << data );
-					}
-				}
-			}
-		}
+	auto it = mUniforNameToBuffer.find( name );
+	if ( it == mUniforNameToBuffer.end() ) {
+		return;
 	}
+	it->second->uniform( name, value );
+}
 
-	// Check
-	if ( !descriptorFound ) {
-	}
+void ShaderProg::uniform( const std::string &name, bool value )
+{
+	setUniform<bool>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, int32_t value )
+{
+	setUniform<bool>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, uint32_t value )
+{
+	setUniform<bool>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, float value )
+{
+	setUniform<bool>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::vec2 &value )
+{
+	setUniform<glm::vec2>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::vec3 &value )
+{
+	setUniform<glm::vec3>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::vec4 &value )
+{
+	setUniform<glm::vec4>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat2x2 &value )
+{
+	setUniform<glm::mat2x2>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat2x3 &value )
+{
+	setUniform<glm::mat2x3>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat2x4 &value )
+{
+	setUniform<glm::mat2x4>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat3x2 &value )
+{
+	setUniform<glm::mat3x2>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat3x3 &value )
+{
+	setUniform<glm::mat3x3>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat3x4 &value )
+{
+	setUniform<glm::mat3x4>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat4x2 &value )
+{
+	setUniform<glm::mat4x2>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat4x3 &value )
+{
+	setUniform<glm::mat4x3>( name, value );
+}
+
+void ShaderProg::uniform( const std::string &name, const glm::mat4x4 &value )
+{
+	setUniform<glm::mat4x4>( name, value );
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

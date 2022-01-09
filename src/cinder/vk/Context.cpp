@@ -24,40 +24,6 @@ static Context *sCurrentContext = nullptr;
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Context::Frame
 
-/*
-void Context::Frame::resetDefaultUniformBuffers()
-{
-	uint32_t n = countU32( defaultUniformBuffers );
-	for ( uint32_t i = 0; i < n; ++i ) {
-		auto &elem = defaultUniformBuffers[i];
-		elem.first = 0;
-	}
-}
-
-void Context::Frame::nextDefaultUniformBuffer()
-{
-	currentDefaultUniformBuffer = nullptr;
-
-	uint32_t n = countU32( defaultUniformBuffers );
-	for ( uint32_t i = 0; i < n; ++i ) {
-		auto &elem = defaultUniformBuffers[i];
-		if ( elem.first == 0 ) {
-			currentDefaultUniformBuffer = elem.second.get();
-		}
-	}
-
-	if ( currentDefaultUniformBuffer == nullptr ) {
-		vk::Buffer::Usage usage = vk::Buffer::Usage().uniformBuffer();
-
-		uint32_t flags				= 1;
-		auto	 buffer				= vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, commandBuffer->getDevice() );
-		currentDefaultUniformBuffer = buffer.get();
-
-		defaultUniformBuffers.push_back( std::make_pair( flags, buffer ) );
-	}
-}
-*/
-
 void Context::Frame::resetDrawCalls()
 {
 	uint32_t n = countU32( drawCalls );
@@ -85,10 +51,6 @@ void Context::Frame::nextDrawCall( const vk::DescriptorSetLayoutRef &defaultSetL
 		auto drawCall = std::make_unique<DrawCall>();
 
 		drawCall->descriptorSet = vk::DescriptorSet::create( descriptorPool, defaultSetLayout );
-
-		//vk::Buffer::Usage usage		   = vk::Buffer::Usage().uniformBuffer();
-		//vk::Buffer::Options options = vk::Buffer::Options();
-		//drawCall->defaultUniformBuffer = vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, options, commandBuffer->getDevice() );
 
 		currentDrawCall		   = drawCall.get();
 		currentDrawCall->inUse = true;
@@ -122,20 +84,11 @@ Context::DescriptorState::DescriptorState()
 
 void Context::DescriptorState::bindUniformBuffer( uint32_t bindingNumber, const vk::Buffer *buffer )
 {
-	// Descriptor &descriptor		 = mSets[setNumber][bindingNumber];
-	// descriptor.type				 = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	// descriptor.bufferInfo.buffer = buffer;
-
 	mDescriptors.insert_or_assign( bindingNumber, Descriptor( bindingNumber, buffer ) );
 }
 
 void Context::DescriptorState::bindCombinedImageSampler( uint32_t bindingNumber, const vk::ImageView *imageView, const vk::Sampler *sampler )
 {
-	// Descriptor &descriptor		   = mSets[setNumber][bindingNumber];
-	// descriptor.type				   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	// descriptor.imageInfo.imageView = imageView;
-	// descriptor.imageInfo.sampler   = sampler;
-
 	bool bind = true;
 	auto it	  = mDescriptors.find( bindingNumber );
 	if ( it != mDescriptors.end() ) {
@@ -278,25 +231,6 @@ void Context::initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame 
 											  .addCombinedImageSampler( 10 * CINDER_CONTEXT_MAX_TEXTURE_COUNT )
 											  .addUniformBuffer( 10 * CINDER_CONTEXT_MAX_UBO_COUNT );
 	frame.descriptorPool = vk::DescriptorPool::create( options, getDevice() );
-	/*
-		// Descriptor stuff
-		{
-			vk::DescriptorPool::Options options = vk::DescriptorPool::Options()
-													  .addCombinedImageSampler( CINDER_CONTEXT_MAX_TEXTURE_COUNT )
-													  .addUniformBuffer( CINDER_CONTEXT_MAX_UBO_COUNT );
-			frame.descriptorPool = vk::DescriptorPool::create( options, getDevice() );
-
-			frame.descriptorSet = vk::DescriptorSet::create( frame.descriptorPool, mDefaultSetLayout );
-		}
-
-		// Default uniform buffer
-		{
-
-			vk::Buffer::Usage usage = vk::Buffer::Usage().uniformBuffer();
-
-			frame.defaultUniformBuffer = vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, getDevice() );
-		}
-	*/
 
 	uint32_t renderTargetCount = countU32( mRenderTargetFormats );
 	frame.renderTargets.resize( renderTargetCount );
@@ -501,14 +435,6 @@ void Context::waitForCompletion()
 
 std::pair<ivec2, ivec2> Context::getViewport()
 {
-	// if( mViewportStack.empty() ) {
-	//	GLint params[4];
-	//	glGetIntegerv( GL_VIEWPORT, params );
-	//	// push twice in anticipation of later pop
-	//	mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
-	//	mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
-	// }
-
 	return mViewportStack.back();
 }
 
@@ -524,8 +450,6 @@ void Context::bindShaderProg( vk::ShaderProgRef prog )
 
 	auto block = mShaderProgram->getDefaultUniformBlock();
 	if ( block ) {
-		// mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().defaultUniformBuffer.get() );
-		// mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().currentDrawCall->defaultUniformBuffer.get() );
 		mDescriptorState.bindUniformBuffer( block->getBinding(), mShaderProgram->getDefaultUniformBuffer()->getBindableBuffer() );
 	}
 }
@@ -964,25 +888,6 @@ void Context::bindGraphicsPipeline()
 
 	auto &pipeline = mGraphicsPipelines[hash];
 	getCommandBuffer()->bindPipeline( VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline );
-
-	/*
-		if ( !mGraphicsPipeline ) {
-			// mGraphicsState.ia.topology			   = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-			// mGraphicsState.rs.rasterizationSamples = mSampleCount;
-			// mGraphicsState.ds.depthCompareOp	   = VK_COMPARE_OP_LESS_OR_EQUAL;
-			// mGraphicsState.om.renderTargetCount	   = 1;
-			// mGraphicsState.om.renderTargets[0]	   = mRenderTargetFormats[0];
-			// mGraphicsState.om.depthStencil		   = mDepthStencilFormat;
-			// mGraphicsState.cb.attachmentCount	   = 1;
-			// mGraphicsState.cb.attachments[0]	   = {};
-
-			mGraphicsPipeline = vk::Pipeline::create(
-				mGraphicsState,
-				getDevice() );
-		}
-
-		getCommandBuffer()->bindPipeline( VK_PIPELINE_BIND_POINT_GRAPHICS, mGraphicsPipeline );
-	*/
 }
 
 void Context::setDynamicStates( bool force )

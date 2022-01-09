@@ -23,15 +23,9 @@ private:
 		{
 			bool				 inUse;
 			vk::DescriptorSetRef descriptorSet;
-			// vk::BufferRef		 defaultUniformBuffer;
 		};
 
-		vk::DescriptorPoolRef descriptorPool;
-		// vk::DescriptorSetRef							descriptorSet;
-		// vk::BufferRef									defaultUniformBuffer;
-		// std::vector<std::pair<uint32_t, vk::BufferRef>> defaultUniformBuffers;
-		// vk::Buffer									 *currentDefaultUniformBuffer = nullptr;
-
+		vk::DescriptorPoolRef				   descriptorPool;
 		std::vector<std::unique_ptr<DrawCall>> drawCalls;
 		DrawCall							  *currentDrawCall = nullptr;
 
@@ -41,9 +35,6 @@ private:
 		vk::ImageViewRef			  dsv;
 		vk::CommandBufferRef		  commandBuffer;
 		uint64_t					  frameSignaledValue;
-
-		// void resetDefaultUniformBuffers();
-		// void nextDefaultUniformBuffer();
 
 		void resetDrawCalls();
 		void nextDrawCall( const vk::DescriptorSetLayoutRef &defaultSetLayout );
@@ -102,9 +93,6 @@ public:
 	void clearStencil( const int stencil ) { mClearValues.stencil = static_cast<uint8_t>( stencil ); }
 
 	// clang-format off
-	//void enableDepthWrite( bool enable ) { mGraphicsState.ds.depthWriteEnable = enable; }
-	//void enableDepthTest( bool enable ) { mGraphicsState.ds.depthTestEnable = enable; }
-	//void enableStencilTest( bool enable ) { mGraphicsState.ds.stencilTestEnable = enable; }
 	void enableDepthWrite( bool enable ) { mDynamicStates.depthWrite = enable; }
 	void enableDepthTest( bool enable ) { mDynamicStates.depthTest = enable; }
 	void enableStencilTest( bool enable ) { mDynamicStates.stencilTest = enable; }
@@ -187,20 +175,6 @@ private:
 		float	depth	= CINDER_DEFAULT_DEPTH;
 		uint8_t stencil = CINDER_DEFAULT_STENCIL;
 	};
-
-	/*
-	struct GraphicsState
-	{
-		std::vector<vk::Pipeline::Attribute> vertexAttributes;
-		std::vector<vk::BufferRef>			 vertexBuffers;
-		VkCullModeFlags						 cullMode	 = VK_CULL_MODE_NONE;
-		VkFrontFace							 frontFace	 = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		bool								 depthWrite	 = false;
-		bool								 depthTest	 = false;
-		bool								 stencilTest = false;
-		vk::ShaderProgRef					 program;
-	};
-*/
 
 	template <typename ValueT>
 	class StateT

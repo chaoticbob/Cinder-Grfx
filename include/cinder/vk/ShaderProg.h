@@ -201,9 +201,28 @@ public:
 
 	const vk::UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
 
-	vk::UniformBuffer* getDefaultUniformBuffer() const { return mDefaultUniformBuffer; }
+	vk::UniformBuffer *getDefaultUniformBuffer() const { return mDefaultUniformBuffer; }
 
-	void uniform( const std::string &name, int data ) const;
+	void uniform( const std::string &name, bool value );
+	void uniform( const std::string &name, int32_t value );
+	void uniform( const std::string &name, uint32_t value );
+	void uniform( const std::string &name, float value );
+
+	void uniform( const std::string &name, const glm::vec2 &value );
+	void uniform( const std::string &name, const glm::vec3 &value );
+	void uniform( const std::string &name, const glm::vec4 &value );
+
+	void uniform( const std::string &name, const glm::mat2x2 &value );
+	void uniform( const std::string &name, const glm::mat2x3 &value );
+	void uniform( const std::string &name, const glm::mat2x4 &value );
+
+	void uniform( const std::string &name, const glm::mat3x2 &value );
+	void uniform( const std::string &name, const glm::mat3x3 &value );
+	void uniform( const std::string &name, const glm::mat3x4 &value );
+
+	void uniform( const std::string &name, const glm::mat4x2 &value );
+	void uniform( const std::string &name, const glm::mat4x3 &value );
+	void uniform( const std::string &name, const glm::mat4x4 &value );
 
 protected:
 	ShaderProg(
@@ -233,6 +252,9 @@ private:
 	void parseDscriptorBindings( const vk::ShaderModule *shader );
 	void parseUniformBlocks( const vk::ShaderModule *shader );
 
+	template <typename T>
+	void setUniform(const std::string& name, const T& value);
+
 private:
 	vk::ShaderModuleRef mVs; // Vertex
 	vk::ShaderModuleRef mPs; // Pixel / Fragment
@@ -248,6 +270,7 @@ private:
 	vk::UniformBlock									  *mDefaultUniformBlock = nullptr;
 	std::map<std::string, vk::UniformBufferRef>			   mUniformBuffers;
 	vk::UniformBuffer									 *mDefaultUniformBuffer = nullptr;
+	std::map<std::string, vk::UniformBufferRef>			   mUniforNameToBuffer;
 };
 
 //! @class GlslProg

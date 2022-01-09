@@ -697,10 +697,22 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 		case ImageIo::ChannelOrder::BGR: {
 			switch ( dataType ) {
 				default: break;
-				case ImageIo::DataType::UINT8: conversionTarget = CONVERSION_TARGET_RGBA_U8; break;
-				case ImageIo::DataType::UINT16: conversionTarget = CONVERSION_TARGET_RGBA_U16; break;
-				case ImageIo::DataType::FLOAT32: conversionTarget = CONVERSION_TARGET_RGBA_32F; break;
-				case ImageIo::DataType::FLOAT16: conversionTarget = CONVERSION_TARGET_RGBA_32F; break;
+				case ImageIo::DataType::UINT8:
+					imageFormat		 = VK_FORMAT_R8G8B8A8_UNORM;
+					conversionTarget = CONVERSION_TARGET_RGBA_U8;
+					break;
+				case ImageIo::DataType::UINT16:
+					imageFormat		 = VK_FORMAT_R16G16B16A16_UNORM;
+					conversionTarget = CONVERSION_TARGET_RGBA_U16;
+					break;
+				case ImageIo::DataType::FLOAT32:
+					imageFormat		 = VK_FORMAT_R32G32B32A32_SFLOAT;
+					conversionTarget = CONVERSION_TARGET_RGBA_32F;
+					break;
+				case ImageIo::DataType::FLOAT16:
+					imageFormat		 = VK_FORMAT_R16G16B16A16_SFLOAT;
+					conversionTarget = CONVERSION_TARGET_RGBA_32F;
+					break;
 			}
 		} break;
 
@@ -756,6 +768,9 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 		} break;
 
 		case CONVERSION_TARGET_RGBA_U8: {
+			SurfaceConstraints constraints = SurfaceConstraints();
+			Surface8u		   mip0		   = Surface8u( imageSource, constraints, true );
+			copyMipsToImage<uint8_t>( getDevice().get(), mip0, 0, mImage.get() );
 		} break;
 
 		case CONVERSION_TARGET_RGBA_U16: {

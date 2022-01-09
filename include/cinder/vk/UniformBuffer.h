@@ -40,9 +40,13 @@ public:
 
 	vk::ContentMode getContentMode() const { return mContentMode; }
 
-	const vk::Buffer* getBindableBuffer() const;
+	const vk::Buffer *getBindableBuffer() const;
 
+	void uniform( const std::string &name, bool value );
+	void uniform( const std::string &name, int32_t value );
+	void uniform( const std::string &name, uint32_t value );
 	void uniform( const std::string &name, float value );
+
 	void uniform( const std::string &name, const glm::vec2 &value );
 	void uniform( const std::string &name, const glm::vec3 &value );
 	void uniform( const std::string &name, const glm::vec4 &value );
