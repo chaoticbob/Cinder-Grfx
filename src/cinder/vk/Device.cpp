@@ -798,6 +798,7 @@ void Device::initializeStagingBuffer()
 			mStagingBufferSize,
 			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 			CI_STAGING_BUFFER_MEMORY_USAGE,
+			vk::Buffer::Options(),
 			shared_from_this() );
 	}
 }
@@ -861,29 +862,60 @@ void Device::copyToBuffer(
 	const void *pSrcData,
 	vk::Buffer *pDstBuffer )
 {
-	std::lock_guard<std::mutex> lock( mCopyMutex );
-	initializeStagingBuffer();
-
-	const uint64_t copySize = std::min<uint64_t>( size, pDstBuffer->getSize() );
-
-	// Figure out which staging buffer to use
-	vk::BufferRef stagingBuffer = mStagingBuffer;
-	if ( copySize > mStagingBufferSize ) {
-		stagingBuffer = vk::Buffer::create( copySize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, CI_STAGING_BUFFER_MEMORY_USAGE, shared_from_this() );
+	bool hasData = ( size > 0 ) && ( pSrcData != nullptr );
+	if ( !hasData || ( pDstBuffer == nullptr ) ) {
+		return;
 	}
 
-	// Map staging buffer
-	void *pMappedAddress = nullptr;
-	stagingBuffer->map( &pMappedAddress );
+	// Minimize on the copy so there's not overrun
+	size = std::min<uint64_t>( size, pDstBuffer->getSize() );
 
-	// Copy source data to staging buffer
-	memcpy( pMappedAddress, pSrcData, copySize );
+	// Usage staging buffer to copy to device (GPU) memory
+	if ( pDstBuffer->getMemoryUsage() == vk::MemoryUsage::GPU_ONLY ) {
+		std::lock_guard<std::mutex> lock( mCopyMutex );
+		initializeStagingBuffer();
 
-	// Do the copy
-	internalCopyBuffer( copySize, stagingBuffer.get(), 0, pDstBuffer, 0 );
+		const uint64_t copySize = std::min<uint64_t>( size, pDstBuffer->getSize() );
 
-	// Unmap staging buffer
-	stagingBuffer->unmap();
+		// Figure out which staging buffer to use
+		vk::BufferRef stagingBuffer = mStagingBuffer;
+		if ( copySize > mStagingBufferSize ) {
+			stagingBuffer = vk::Buffer::create(
+				copySize,
+				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+				CI_STAGING_BUFFER_MEMORY_USAGE,
+				vk::Buffer::Options(),
+				shared_from_this() );
+		}
+
+		// Map staging buffer
+		void *pMappedAddress = nullptr;
+		stagingBuffer->map( &pMappedAddress );
+
+		// Copy source data to staging buffer
+		memcpy( pMappedAddress, pSrcData, copySize );
+
+		// Do the copy
+		internalCopyBuffer( copySize, stagingBuffer.get(), 0, pDstBuffer, 0 );
+
+		// Unmap staging buffer
+		stagingBuffer->unmap();
+	}
+	// Copy straight to host (CPU) memory
+	else {
+		// Store mapped state to determine if we need to unmap later
+		bool isMapped = pDstBuffer->isMapped();
+
+		// Copy data to buffer
+		void *pDstData = nullptr;
+		pDstBuffer->map( &pDstData );
+		memcpy( pDstData, pSrcData, size );
+
+		// If the buffer was not mapped previously, then unmap it
+		if ( !isMapped ) {
+			pDstBuffer->unmap();
+		}
+	}
 }
 
 void *Device::beginCopyToBuffer( uint64_t size, vk::Buffer *pDstBuffer )
@@ -892,7 +924,12 @@ void *Device::beginCopyToBuffer( uint64_t size, vk::Buffer *pDstBuffer )
 	initializeStagingBuffer();
 
 	if ( size > mStagingBufferSize ) {
-		mOversizedStagingBuffer = vk::Buffer::create( size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, CI_STAGING_BUFFER_MEMORY_USAGE, shared_from_this() );
+		mOversizedStagingBuffer = vk::Buffer::create(
+			size,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			CI_STAGING_BUFFER_MEMORY_USAGE,
+			vk::Buffer::Options(),
+			shared_from_this() );
 	}
 
 	vk::BufferRef stagingBuffer = mOversizedStagingBuffer ? mOversizedStagingBuffer : mStagingBuffer;
@@ -1059,7 +1096,12 @@ void Device::copyToImage(
 	// Figure out which staging buffer to use
 	vk::BufferRef stagingBuffer = mStagingBuffer;
 	if ( srcDataSize > mStagingBufferSize ) {
-		stagingBuffer = vk::Buffer::create( srcDataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::CPU_TO_GPU, shared_from_this() );
+		stagingBuffer = vk::Buffer::create(
+			srcDataSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			MemoryUsage::CPU_TO_GPU,
+			vk::Buffer::Options(),
+			shared_from_this() );
 	}
 
 	// Map staging buffer
@@ -1111,7 +1153,12 @@ void *Device::beginCopyToImage(
 
 	const uint64_t srcDataSize = srcHeight * srcRowBytes;
 	if ( srcDataSize > mStagingBufferSize ) {
-		mOversizedStagingBuffer = vk::Buffer::create( srcDataSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, MemoryUsage::CPU_TO_GPU, shared_from_this() );
+		mOversizedStagingBuffer = vk::Buffer::create(
+			srcDataSize,
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			MemoryUsage::CPU_TO_GPU,
+			vk::Buffer::Options(),
+			shared_from_this() );
 	}
 
 	vk::BufferRef stagingBuffer = mOversizedStagingBuffer ? mOversizedStagingBuffer : mStagingBuffer;

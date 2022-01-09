@@ -1,6 +1,7 @@
 #include "cinder/vk/ShaderProg.h"
 #include "cinder/vk/Device.h"
 #include "cinder/vk/Environment.h"
+#include "cinder/vk/UniformBuffer.h"
 #include "cinder/app/AppBase.h"
 #include "cinder/app/RendererVk.h"
 #include "cinder/Log.h"
@@ -535,6 +536,7 @@ const std::vector<vk::InterfaceVariable> &ShaderModule::getVertexAttributes() co
 // ShaderProg
 
 ShaderProgRef ShaderProg::create(
+	vk::ContextRef		  context,
 	vk::ShaderModuleRef	  vertOrCompModule,
 	VkShaderStageFlagBits shaderStage )
 {
@@ -544,6 +546,7 @@ ShaderProgRef ShaderProg::create(
 
 	if ( shaderStage == VK_SHADER_STAGE_VERTEX_BIT ) {
 		return vk::ShaderProgRef( new vk::ShaderProg(
+			context,
 			vertOrCompModule,
 			nullptr,
 			nullptr,
@@ -553,6 +556,7 @@ ShaderProgRef ShaderProg::create(
 	}
 
 	return vk::ShaderProgRef( new vk::ShaderProg(
+		context,
 		nullptr,
 		nullptr,
 		nullptr,
@@ -562,6 +566,7 @@ ShaderProgRef ShaderProg::create(
 }
 
 ShaderProgRef ShaderProg::create(
+	vk::ContextRef		context,
 	vk::ShaderModuleRef vertModule,
 	vk::ShaderModuleRef fragModule,
 	vk::ShaderModuleRef geomModule,
@@ -569,6 +574,7 @@ ShaderProgRef ShaderProg::create(
 	vk::ShaderModuleRef tescModule )
 {
 	return vk::ShaderProgRef( new vk::ShaderProg(
+		context,
 		vertModule,
 		fragModule,
 		geomModule,
@@ -578,18 +584,18 @@ ShaderProgRef ShaderProg::create(
 }
 
 vk::ShaderProgRef ShaderProg::create(
-	vk::DeviceRef		  device,
+	vk::ContextRef		  context,
 	const DataSourceRef	&vertOrCompSpirvDataSource,
 	VkShaderStageFlagBits shaderStage )
 {
 	std::vector<char> spirv;
 	loadShaderSpirv( vertOrCompSpirvDataSource, spirv );
 
-	return vk::ShaderProg::create( device, vk::SpirvBytecode{ spirv.size(), spirv.data() }, shaderStage );
+	return vk::ShaderProg::create( context, vk::SpirvBytecode{ spirv.size(), spirv.data() }, shaderStage );
 }
 
 vk::ShaderProgRef ShaderProg::create(
-	vk::DeviceRef		 device,
+	vk::ContextRef		 context,
 	const DataSourceRef &vertSpirvDataSource,
 	const DataSourceRef &fragSpirvDataSource,
 	const DataSourceRef &geomSpirvDataSource,
@@ -608,7 +614,7 @@ vk::ShaderProgRef ShaderProg::create(
 	loadShaderSpirv( tescSpirvDataSource, tescSpirv );
 
 	return vk::ShaderProg::create(
-		device,
+		context,
 		vk::SpirvBytecode{ vertSpirv.size(), vertSpirv.data() },
 		vk::SpirvBytecode{ fragSpirv.size(), fragSpirv.data() },
 		vk::SpirvBytecode{ geomSpirv.size(), geomSpirv.data() },
@@ -617,16 +623,16 @@ vk::ShaderProgRef ShaderProg::create(
 }
 
 vk::ShaderProgRef ShaderProg::create(
-	vk::DeviceRef			 device,
+	vk::ContextRef			 context,
 	const vk::SpirvBytecode &vsOrCsSpirv,
 	VkShaderStageFlagBits	 shaderStage )
 {
 	auto spirvStore = std::vector<char>( vsOrCsSpirv.begin(), vsOrCsSpirv.end() );
-	return vk::ShaderProgRef( new vk::ShaderProg( device, std::move( spirvStore ), shaderStage ) );
+	return vk::ShaderProgRef( new vk::ShaderProg( context, std::move( spirvStore ), shaderStage ) );
 }
 
 vk::ShaderProgRef ShaderProg::create(
-	vk::DeviceRef			 device,
+	vk::ContextRef			 context,
 	const vk::SpirvBytecode &vsSpirv,
 	const vk::SpirvBytecode &psSpirv,
 	const vk::SpirvBytecode &gsSpirv,
@@ -640,7 +646,7 @@ vk::ShaderProgRef ShaderProg::create(
 	auto hsSpirvStore = std::vector<char>( hsSpirv.begin(), hsSpirv.end() );
 
 	return vk::ShaderProgRef( new vk::ShaderProg(
-		device,
+		context,
 		std::move( vsSpirvStore ),
 		std::move( psSpirvStore ),
 		std::move( gsSpirvStore ),
@@ -649,13 +655,15 @@ vk::ShaderProgRef ShaderProg::create(
 }
 
 ShaderProg::ShaderProg(
+	vk::ContextRef		context,
 	vk::ShaderModuleRef vs,
 	vk::ShaderModuleRef ps,
 	vk::ShaderModuleRef gs,
 	vk::ShaderModuleRef ds,
 	vk::ShaderModuleRef hs,
 	vk::ShaderModuleRef cs )
-	: mVs( vs ),
+	: vk::ContextChildObject( context ),
+	  mVs( vs ),
 	  mPs( ps ),
 	  mGs( gs ),
 	  mDs( ds ),
@@ -666,9 +674,10 @@ ShaderProg::ShaderProg(
 }
 
 ShaderProg::ShaderProg(
-	vk::DeviceRef		  device,
+	vk::ContextRef		  context,
 	std::vector<char>	  &&vsOrCsSpirv,
 	VkShaderStageFlagBits shaderStage )
+	: vk::ContextChildObject( context )
 {
 }
 
@@ -844,12 +853,13 @@ static void alignInterfaceVariables(
 }
 
 ShaderProg::ShaderProg(
-	vk::DeviceRef		device,
+	vk::ContextRef		context,
 	std::vector<char> &&vsSpirv,
 	std::vector<char> &&psSpirv,
 	std::vector<char> &&gsSpirv,
 	std::vector<char> &&dsSpirv,
 	std::vector<char> &&hsSpirv )
+	: vk::ContextChildObject( context )
 {
 	std::vector<std::vector<char> *> stages;
 	if ( !vsSpirv.empty() ) {
@@ -880,19 +890,19 @@ ShaderProg::ShaderProg(
 	}
 
 	if ( !vsSpirv.empty() ) {
-		mVs = vk::ShaderModule::create( vsSpirv, device );
+		mVs = vk::ShaderModule::create( vsSpirv, context->getDevice() );
 	}
 	if ( !hsSpirv.empty() ) {
-		mHs = vk::ShaderModule::create( hsSpirv, device );
+		mHs = vk::ShaderModule::create( hsSpirv, context->getDevice() );
 	}
 	if ( !dsSpirv.empty() ) {
-		mDs = vk::ShaderModule::create( dsSpirv, device );
+		mDs = vk::ShaderModule::create( dsSpirv, context->getDevice() );
 	}
 	if ( !gsSpirv.empty() ) {
-		mGs = vk::ShaderModule::create( gsSpirv, device );
+		mGs = vk::ShaderModule::create( gsSpirv, context->getDevice() );
 	}
 	if ( !psSpirv.empty() ) {
-		mPs = vk::ShaderModule::create( psSpirv, device );
+		mPs = vk::ShaderModule::create( psSpirv, context->getDevice() );
 	}
 
 	parseModules();
@@ -919,6 +929,17 @@ void ShaderProg::parseModules()
 	parseUniformBlocks( mDs.get() );
 	parseUniformBlocks( mHs.get() );
 	parseUniformBlocks( mCs.get() );
+
+	for ( auto &block : mUniformBlocks ) {
+		auto					  &name	   = block->getName();
+		vk::UniformBuffer::Options options = vk::UniformBuffer::Options().cpuOnly();
+		vk::UniformBufferRef	   buffer  = vk::UniformBuffer::create( block, options, getContext() );
+		mUniformBuffers[name]			   = buffer;
+
+		if ((mDefaultUniformBuffer == nullptr) && (name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME) || (name == CI_VK_HLSL_GLOBALS_NAME)) {
+			mDefaultUniformBuffer = buffer.get();
+		}
+	}
 }
 
 void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
@@ -941,8 +962,8 @@ void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
 			 bindings.begin(),
 			 bindings.end(),
 			 [binding]( const vk::DescriptorBinding &elem ) -> bool {
-				 bool isMatchBinding = ( elem.getBinding() == binding.getBinding() );
-				 return isMatchBinding;
+								 bool isMatchBinding = ( elem.getBinding() == binding.getBinding() );
+								 return isMatchBinding;
 			 } );
 		// Add if the binding if not match is found
 		if ( it == bindings.end() ) {
@@ -989,44 +1010,46 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 	auto &blocks = shader->getUniformBlocks();
 	for ( const auto &block : blocks ) {
 		if ( ( block->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( block->getName() == CI_VK_HLSL_GLOBALS_NAME ) ) {
-			// Add default uniform blcok if we don't have one...
+			// Add default uniform block if we don't have one...
 			if ( mDefaultUniformBlock == nullptr ) {
-				auto defaultUniformBlock = std::make_unique<UniformBlock>( *block );
-				mDefaultUniformBlock	 = defaultUniformBlock.get();
+				mDefaultUniformBlock = block.get();
 
-				mUniformBlocks.push_back( std::move( defaultUniformBlock ) );
+				mUniformBlocks.push_back( std::move( block ) );
 			}
-			// ...otherwise validate that default uniform blocks have the same size and uniforms.
+			// ...otherwise validate that default uniform blocks have the set, binding, size, and uniforms
 			else {
 				auto it = std::find_if(
 					mUniformBlocks.begin(),
 					mUniformBlocks.end(),
-					[]( const std::unique_ptr<UniformBlock> &elem ) -> bool {
-						bool res = ( elem->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME );
+					[]( const vk::UniformBlockRef &elem ) -> bool {
+						bool res = ( elem->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( elem->getName() == CI_VK_HLSL_GLOBALS_NAME );
 						return res;
 					} );
 
 				if ( it != mUniformBlocks.end() ) {
+					if ( block->getSet() != ( *it )->getSet() ) {
+						throw VulkanExc( "default uniform buffers in all shader stages must have same set" );
+					}
+
+					if ( block->getBinding() != ( *it )->getBinding() ) {
+						throw VulkanExc( "default uniform buffers in all shader stages must have same binding" );
+					}
+
 					if ( block->getSize() != ( *it )->getSize() ) {
-						std::stringstream ss;
-						ss << "default uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet();
-						ss << " and binding=" << ( *it )->getBinding() << ", set=" << ( *it )->getSet();
-						ss << " do not have the same size";
-						throw VulkanExc( ss.str() );
+						throw VulkanExc( "default uniform buffers in all shader stages must have same size" );
 					}
 
 					if ( block->getUniforms() != ( *it )->getUniforms() ) {
-						std::stringstream ss;
-						ss << "default uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet();
-						ss << " and binding=" << ( *it )->getBinding() << ", set=" << ( *it )->getSet();
-						ss << " do not have the same uniforms";
-						throw VulkanExc( ss.str() );
+						throw VulkanExc( "default uniform buffers in all shader stages must have same uniforms" );
 					}
 				}
 			}
 		}
 		else {
-			// Uniform blocks with the same binding/set must have same size and uniforms.
+			// Uniform blocks with the same binding/set must have same size, uniforms, and name.
+			// If the uniform block names aren't the same, uniform look up will have undefined
+			// behavior.
+			//
 			for ( const auto &existingBlock : mUniformBlocks ) {
 				bool isSameBinding = ( block->getBinding() == existingBlock->getBinding() );
 				bool isSameSet	   = ( block->getSet() == existingBlock->getSet() );
@@ -1043,6 +1066,12 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 				if ( block->getUniforms() != existingBlock->getUniforms() ) {
 					std::stringstream ss;
 					ss << "uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet() << " do not have the same uniforms";
+					throw VulkanExc( ss.str() );
+				}
+
+				if ( block->getName() != existingBlock->getName() ) {
+					std::stringstream ss;
+					ss << "uniform blocks at binding=" << block->getBinding() << ", set=" << block->getSet() << " do not have the same name";
 					throw VulkanExc( ss.str() );
 				}
 			}
@@ -1096,12 +1125,12 @@ vk::GlslProgRef GlslProg::create(
 	const DataSourceRef &teseTextDataSource,
 	const DataSourceRef &tescTextDataSource )
 {
-	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return vk::GlslProg::create( device, vertTextDataSource, fragTextDataSource, geomTextDataSource, teseTextDataSource, tescTextDataSource );
+	vk::ContextRef context = app::RendererVk::getCurrentRenderer()->getContext();
+	return vk::GlslProg::create( context, vertTextDataSource, fragTextDataSource, geomTextDataSource, teseTextDataSource, tescTextDataSource );
 }
 
 vk::GlslProgRef GlslProg::create(
-	vk::DeviceRef		 device,
+	vk::ContextRef		 context,
 	const DataSourceRef &vertTextDataSource,
 	const DataSourceRef &fragTextDataSource,
 	const DataSourceRef &geomTextDataSource,
@@ -1120,7 +1149,7 @@ vk::GlslProgRef GlslProg::create(
 	loadShaderText( teseTextDataSource, teseText );
 	loadShaderText( tescTextDataSource, tescText );
 
-	return vk::GlslProg::create( device, vertText, fragText, geomText, teseText, tescText );
+	return vk::GlslProg::create( context, vertText, fragText, geomText, teseText, tescText );
 }
 
 vk::GlslProgRef GlslProg::create(
@@ -1130,26 +1159,26 @@ vk::GlslProgRef GlslProg::create(
 	const std::string &teseText,
 	const std::string &tescText )
 {
-	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return vk::GlslProg::create( device, vertText, fragText, geomText, teseText, tescText );
+	vk::ContextRef context = app::RendererVk::getCurrentRenderer()->getContext();
+	return vk::GlslProg::create( context, vertText, fragText, geomText, teseText, tescText );
 }
 
 vk::GlslProgRef GlslProg::create(
-	vk::DeviceRef	   device,
+	vk::ContextRef	   context,
 	const std::string &vertText,
 	const std::string &fragText,
 	const std::string &geomText,
 	const std::string &teseText,
 	const std::string &tescText )
 {
-	auto vsSpirv = compileShader( device, vertText, VK_SHADER_STAGE_VERTEX_BIT );
-	auto psSpirv = compileShader( device, fragText, VK_SHADER_STAGE_FRAGMENT_BIT );
-	auto gsSpirv = compileShader( device, geomText, VK_SHADER_STAGE_GEOMETRY_BIT );
-	auto dsSpirv = compileShader( device, teseText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
-	auto hsSpirv = compileShader( device, tescText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
+	auto vsSpirv = compileShader( context->getDevice(), vertText, VK_SHADER_STAGE_VERTEX_BIT );
+	auto psSpirv = compileShader( context->getDevice(), fragText, VK_SHADER_STAGE_FRAGMENT_BIT );
+	auto gsSpirv = compileShader( context->getDevice(), geomText, VK_SHADER_STAGE_GEOMETRY_BIT );
+	auto dsSpirv = compileShader( context->getDevice(), teseText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
+	auto hsSpirv = compileShader( context->getDevice(), tescText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
 
 	return vk::GlslProgRef( new GlslProg(
-		device,
+		context,
 		std::move( vsSpirv ),
 		std::move( psSpirv ),
 		std::move( gsSpirv ),
@@ -1158,22 +1187,22 @@ vk::GlslProgRef GlslProg::create(
 }
 
 GlslProg::GlslProg(
-	vk::DeviceRef		  device,
+	vk::ContextRef		  context,
 	std::vector<char>	  &&vsOrCsSpirv,
 	VkShaderStageFlagBits shaderStage )
-	: vk::ShaderProg( device, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
+	: vk::ShaderProg( context, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
 {
 }
 
 GlslProg::GlslProg(
-	vk::DeviceRef		device,
+	vk::ContextRef		context,
 	std::vector<char> &&vsSpirv,
 	std::vector<char> &&psSpirv,
 	std::vector<char> &&gsSpirv,
 	std::vector<char> &&dsSpirv,
 	std::vector<char> &&hsSpirv )
 	: vk::ShaderProg(
-		  device,
+		  context,
 		  std::forward<std::vector<char>>( vsSpirv ),
 		  std::forward<std::vector<char>>( psSpirv ),
 		  std::forward<std::vector<char>>( gsSpirv ),
@@ -1396,12 +1425,12 @@ HlslProgRef HlslProg::create(
 	const DataSourceRef &dsTextDataSource,
 	const DataSourceRef &hsTextDataSource )
 {
-	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return vk::HlslProg::create( device, vsTextDataSource, psTextDataSource, gsTextDataSource, dsTextDataSource, hsTextDataSource );
+	vk::ContextRef context = app::RendererVk::getCurrentRenderer()->getContext();
+	return vk::HlslProg::create( context, vsTextDataSource, psTextDataSource, gsTextDataSource, dsTextDataSource, hsTextDataSource );
 }
 
 HlslProgRef HlslProg::create(
-	vk::DeviceRef		 device,
+	vk::ContextRef		 context,
 	const DataSourceRef &vsTextDataSource,
 	const DataSourceRef &psTextDataSource,
 	const DataSourceRef &gsTextDataSource,
@@ -1420,7 +1449,7 @@ HlslProgRef HlslProg::create(
 	loadShaderText( dsTextDataSource, dsText );
 	loadShaderText( hsTextDataSource, hsText );
 
-	return vk::HlslProg::create( device, vsText, psText, gsText, dsText, hsText );
+	return vk::HlslProg::create( context, vsText, psText, gsText, dsText, hsText );
 }
 
 vk::HlslProgRef HlslProg::create(
@@ -1430,26 +1459,26 @@ vk::HlslProgRef HlslProg::create(
 	const std::string &dsText,
 	const std::string &hsText )
 {
-	vk::DeviceRef device = app::RendererVk::getCurrentRenderer()->getDevice();
-	return vk::HlslProg::create( device, vsText, psText, gsText, dsText, hsText );
+	vk::ContextRef context = app::RendererVk::getCurrentRenderer()->getContext();
+	return vk::HlslProg::create( context, vsText, psText, gsText, dsText, hsText );
 }
 
 vk::HlslProgRef HlslProg::create(
-	vk::DeviceRef	   device,
+	vk::ContextRef	   context,
 	const std::string &vsText,
 	const std::string &psText,
 	const std::string &gsText,
 	const std::string &dsText,
 	const std::string &hsText )
 {
-	auto vsSpirv = compileShader( device, vsText, VK_SHADER_STAGE_VERTEX_BIT );
-	auto psSpirv = compileShader( device, psText, VK_SHADER_STAGE_FRAGMENT_BIT );
-	auto gsSpirv = compileShader( device, gsText, VK_SHADER_STAGE_GEOMETRY_BIT );
-	auto dsSpirv = compileShader( device, dsText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
-	auto hsSpirv = compileShader( device, hsText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
+	auto vsSpirv = compileShader( context->getDevice(), vsText, VK_SHADER_STAGE_VERTEX_BIT );
+	auto psSpirv = compileShader( context->getDevice(), psText, VK_SHADER_STAGE_FRAGMENT_BIT );
+	auto gsSpirv = compileShader( context->getDevice(), gsText, VK_SHADER_STAGE_GEOMETRY_BIT );
+	auto dsSpirv = compileShader( context->getDevice(), dsText, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT );
+	auto hsSpirv = compileShader( context->getDevice(), hsText, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT );
 
 	return vk::HlslProgRef( new vk::HlslProg(
-		device,
+		context,
 		std::move( vsSpirv ),
 		std::move( psSpirv ),
 		std::move( gsSpirv ),
@@ -1458,22 +1487,22 @@ vk::HlslProgRef HlslProg::create(
 }
 
 HlslProg::HlslProg(
-	vk::DeviceRef		  device,
+	vk::ContextRef		  context,
 	std::vector<char>	  &&vsOrCsSpirv,
 	VkShaderStageFlagBits shaderStage )
-	: vk::ShaderProg( device, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
+	: vk::ShaderProg( context, std::forward<std::vector<char>>( vsOrCsSpirv ), shaderStage )
 {
 }
 
 HlslProg::HlslProg(
-	vk::DeviceRef		device,
+	vk::ContextRef		context,
 	std::vector<char> &&vsSpirv,
 	std::vector<char> &&psSpirv,
 	std::vector<char> &&gsSpirv,
 	std::vector<char> &&dsSpirv,
 	std::vector<char> &&hsSpirv )
 	: vk::ShaderProg(
-		  device,
+		  context,
 		  std::forward<std::vector<char>>( vsSpirv ),
 		  std::forward<std::vector<char>>( psSpirv ),
 		  std::forward<std::vector<char>>( gsSpirv ),

@@ -64,8 +64,11 @@ public:
 	// Returns current thread's renderer, makeCurrentContext() must have been called before on same thread.
 	static RendererVk *getCurrentRenderer();
 
-	// Return pointer to renderer's device
+	// Return renderer's device
 	vk::DeviceRef getDevice() const;
+
+	// Return renderer's context
+	vk::ContextRef getContext() const;
 
 	//! Return pointer to renderer's swapchain, null if cloned renderer
 	vk::SwapchainRef getSwapchain() const;

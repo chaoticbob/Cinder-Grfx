@@ -1,4 +1,4 @@
-#include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/ChildObject.h"
 #include "cinder/vk/Device.h"
 #include "cinder/vk/Environment.h"
 

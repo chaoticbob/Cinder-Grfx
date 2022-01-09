@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/ChildObject.h"
 #include "cinder/vk/UniformBlock.h"
 #include "cinder/vk/Util.h"
 
@@ -38,7 +38,7 @@ public:
 
 	const std::vector<vk::DescriptorBinding> &getDescriptorBindings() const { return mDescriptorBindings; }
 
-	const std::vector<std::unique_ptr<vk::UniformBlock>> &getUniformBlocks() const { return mUniformBlocks; }
+	const std::vector<vk::UniformBlockRef> &getUniformBlocks() const { return mUniformBlocks; }
 
 	VkShaderModule getShaderModuleHandle() const { return mShaderModuleHandle; }
 
@@ -50,15 +50,15 @@ private:
 	void parseUniformBlocks( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings );
 
 private:
-	VkShaderStageFlagBits						   mShaderStage = static_cast<VkShaderStageFlagBits>( 0 );
-	std::string									   mEntryPoint;
-	SpvSourceLanguage							   mSourceLanguage = SpvSourceLanguageUnknown;
-	std::vector<vk::InterfaceVariable>			   mInputVariables;
-	std::vector<vk::InterfaceVariable>			   mOutputVariables;
-	std::vector<vk::InterfaceVariable>			   mNullVariables;
-	std::vector<vk::DescriptorBinding>			   mDescriptorBindings;
-	std::vector<std::unique_ptr<vk::UniformBlock>> mUniformBlocks;
-	vk::UniformBlock							  *mDefaultUniformBlock = nullptr;
+	VkShaderStageFlagBits			   mShaderStage = static_cast<VkShaderStageFlagBits>( 0 );
+	std::string						   mEntryPoint;
+	SpvSourceLanguage				   mSourceLanguage = SpvSourceLanguageUnknown;
+	std::vector<vk::InterfaceVariable> mInputVariables;
+	std::vector<vk::InterfaceVariable> mOutputVariables;
+	std::vector<vk::InterfaceVariable> mNullVariables;
+	std::vector<vk::DescriptorBinding> mDescriptorBindings;
+	std::vector<vk::UniformBlockRef>   mUniformBlocks;
+	vk::UniformBlock					 *mDefaultUniformBlock = nullptr;
 
 	VkShaderModule mShaderModuleHandle = VK_NULL_HANDLE;
 };
@@ -67,6 +67,7 @@ private:
 //!
 //!
 class CI_API ShaderProg
+	: public vk::ContextChildObject
 {
 public:
 	struct CI_API Format
@@ -135,15 +136,17 @@ public:
 
 	virtual ~ShaderProg();
 
-	//! Create a shader program from shader modules or SPIR-V data sources
-	static vk::ShaderProgRef create( vk::DeviceRef device, const Format &format );
+	////! Create a shader program from shader modules or SPIR-V data sources
+	// static vk::ShaderProgRef create( vk::DeviceRef device, const Format &format );
 
 	//! Create a shader program from shader modules
 	static vk::ShaderProgRef create(
+		vk::ContextRef		  context,
 		vk::ShaderModuleRef	  vertOrCompModule,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static vk::ShaderProgRef create(
+		vk::ContextRef		context,
 		vk::ShaderModuleRef vertModule,
 		vk::ShaderModuleRef fragModule,
 		vk::ShaderModuleRef geomModule = nullptr,
@@ -152,12 +155,12 @@ public:
 
 	//! Create a shader program from SPIR-V data sources
 	static vk::ShaderProgRef create(
-		vk::DeviceRef		  device,
+		vk::ContextRef		  context,
 		const DataSourceRef	&vertOrCompSpirvDataSource,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static vk::ShaderProgRef create(
-		vk::DeviceRef		 device,
+		vk::ContextRef		 context,
 		const DataSourceRef &vertSpirvDataSource,
 		const DataSourceRef &fragSpirvDataSource,
 		const DataSourceRef &geomSpirvDataSource = nullptr,
@@ -166,12 +169,12 @@ public:
 
 	//! Create a shader program from SPIR-V
 	static vk::ShaderProgRef create(
-		vk::DeviceRef			 device,
+		vk::ContextRef			 context,
 		const vk::SpirvBytecode &vsOrCsSpirv,
 		VkShaderStageFlagBits	 shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static vk::ShaderProgRef create(
-		vk::DeviceRef			 device,
+		vk::ContextRef			 context,
 		const vk::SpirvBytecode &vsSpirv,
 		const vk::SpirvBytecode &psSpirv,
 		const vk::SpirvBytecode &gsSpirv = vk::SpirvBytecode{ 0, nullptr },
@@ -196,12 +199,15 @@ public:
 
 	const std::map<uint32_t, std::vector<DescriptorBinding>> &getSetBindings() const { return mSetBindings; }
 
-	const UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
+	const vk::UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
+
+	vk::UniformBuffer* getDefaultUniformBuffer() const { return mDefaultUniformBuffer; }
 
 	void uniform( const std::string &name, int data ) const;
 
 protected:
 	ShaderProg(
+		vk::ContextRef		context,
 		vk::ShaderModuleRef vs,
 		vk::ShaderModuleRef ps,
 		vk::ShaderModuleRef gs,
@@ -210,12 +216,12 @@ protected:
 		vk::ShaderModuleRef cs );
 
 	ShaderProg(
-		vk::DeviceRef		  device,
+		vk::ContextRef		  context,
 		std::vector<char>	  &&vsOrCsSpirv,
 		VkShaderStageFlagBits shaderStage );
 
 	ShaderProg(
-		vk::DeviceRef		device,
+		vk::ContextRef		context,
 		std::vector<char> &&vsSpirv,
 		std::vector<char> &&psSpirv,
 		std::vector<char> &&gsSpirv,
@@ -238,8 +244,10 @@ private:
 	std::vector<vk::InterfaceVariable>					   mNullVariables;		// Return this if no vertex attributes
 	std::map<uint32_t, std::vector<vk::DescriptorBinding>> mSetBindings;		// Set:bindings
 	std::map<std::string, vk::DescriptorBinding *>		   mDescriptorBindings; // Name:binding
-	std::vector<std::unique_ptr<UniformBlock>>			   mUniformBlocks;
-	UniformBlock										  *mDefaultUniformBlock = nullptr;
+	std::vector<vk::UniformBlockRef>					   mUniformBlocks;
+	vk::UniformBlock									  *mDefaultUniformBlock = nullptr;
+	std::map<std::string, vk::UniformBufferRef>			   mUniformBuffers;
+	vk::UniformBuffer									 *mDefaultUniformBuffer = nullptr;
 };
 
 //! @class GlslProg
@@ -265,12 +273,12 @@ public:
 
 	// Create GLSL prog from data source using device
 	static GlslProgRef create(
-		vk::DeviceRef		  device,
+		vk::ContextRef		  context,
 		const DataSourceRef	&vsOrCsTextDataSource,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static GlslProgRef create(
-		vk::DeviceRef		 device,
+		vk::ContextRef		 context,
 		const DataSourceRef &vsTextDataSource,
 		const DataSourceRef &psTextDataSource,
 		const DataSourceRef &gsTextDataSource = nullptr,
@@ -291,12 +299,12 @@ public:
 
 	// Create GLSL prog from text source code using device
 	static GlslProgRef create(
-		vk::DeviceRef		  device,
+		vk::ContextRef		  context,
 		const std::string	  &vsOrCsText,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static GlslProgRef create(
-		vk::DeviceRef	   device,
+		vk::ContextRef	   context,
 		const std::string &vsText,
 		const std::string &psText,
 		const std::string &gsText = "",
@@ -307,12 +315,12 @@ public:
 
 private:
 	GlslProg(
-		vk::DeviceRef		  device,
+		vk::ContextRef		  context,
 		std::vector<char>	  &&vsOrCsSpirv,
 		VkShaderStageFlagBits shaderStage );
 
 	GlslProg(
-		vk::DeviceRef		device,
+		vk::ContextRef		context,
 		std::vector<char> &&vsSpirv,
 		std::vector<char> &&psSpirv,
 		std::vector<char> &&gsSpirv,
@@ -369,7 +377,7 @@ public:
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static HlslProgRef create(
-		vk::DeviceRef		 device,
+		vk::ContextRef		 context,
 		const DataSourceRef &vsTextDataSource,
 		const DataSourceRef &psTextDataSource,
 		const DataSourceRef &gsTextDataSource = nullptr,
@@ -390,12 +398,12 @@ public:
 
 	// Create HLSL prog from text source code using device
 	static HlslProgRef create(
-		vk::DeviceRef		  device,
+		vk::ContextRef		  context,
 		const std::string	  &vsOrCsText,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
 	static HlslProgRef create(
-		vk::DeviceRef	   device,
+		vk::ContextRef	   context,
 		const std::string &vsText,
 		const std::string &psText,
 		const std::string &gsText = "",
@@ -406,12 +414,12 @@ public:
 
 private:
 	HlslProg(
-		vk::DeviceRef		  device,
+		vk::ContextRef		  context,
 		std::vector<char>	  &&vsOrCsSpirv,
 		VkShaderStageFlagBits shaderStage );
 
 	HlslProg(
-		vk::DeviceRef		device,
+		vk::ContextRef		context,
 		std::vector<char> &&vsSpirv,
 		std::vector<char> &&psSpirv,
 		std::vector<char> &&gsSpirv,

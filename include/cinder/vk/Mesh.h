@@ -1,7 +1,7 @@
 #pragma once
 
 #include "cinder/vk/Buffer.h"
-#include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/ChildObject.h"
 
 #include "cinder/Color.h"
 #include "cinder/Vector.h"

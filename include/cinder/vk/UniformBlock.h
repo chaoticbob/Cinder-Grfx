@@ -5,7 +5,9 @@
 namespace cinder::vk {
 
 class ShaderModule;
-struct UniformBlock;
+class UniformBlock;
+
+using UniformBlockRef = std::shared_ptr<UniformBlock>;
 
 enum UniformSemantic
 {
@@ -47,7 +49,7 @@ struct CI_API Uniform
 		return isNotSame;
 	}
 
-	const std::string & getName() const { return mName; }
+	const std::string  &getName() const { return mName; }
 	vk::DataType		getDataType() const { return mDataType; }
 	vk::UniformSemantic getUniformSemantic() const { return mUniformSemantic; }
 	uint32_t			getOffset() const { return mOffset; }
@@ -61,16 +63,16 @@ private:
 	uint32_t			mArraySize		 = 1;
 	uint32_t			mArrayStride	 = 0;
 
-	friend struct UniformBlock;
-	friend class ShaderModule;
+	friend class UniformBlock;
 };
 
-struct CI_API UniformBlock
+class CI_API UniformBlock
 {
+public:
 	UniformBlock() {}
 
 	UniformBlock(
-		const std::string &			name,
+		const std::string		  &name,
 		uint32_t					size,
 		uint32_t					binding,
 		uint32_t					set,

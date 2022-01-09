@@ -66,7 +66,6 @@ list(APPEND APP_SRC_FILES
 )
 
 list(APPEND GRFX_HDR_FILES
-    ${INC_PATH}/cinder/grfx/draw.h
     ${INC_PATH}/cinder/grfx/grfx.h
     ${INC_PATH}/cinder/grfx/grfx_config.h
     ${INC_PATH}/cinder/grfx/Constants.h
@@ -97,7 +96,8 @@ list(APPEND VK_HDR_FILES
     ${INC_PATH}/cinder/vk/Context.h
     ${INC_PATH}/cinder/vk/Descriptor.h
     ${INC_PATH}/cinder/vk/Device.h
-    ${INC_PATH}/cinder/vk/DeviceChildObject.h
+    ${INC_PATH}/cinder/vk/draw.h
+    ${INC_PATH}/cinder/vk/ChildObject.h
     ${INC_PATH}/cinder/vk/DeviceDispatchTable.h
     ${INC_PATH}/cinder/vk/Environment.h
     ${INC_PATH}/cinder/vk/GlslProg.h
@@ -131,7 +131,7 @@ list(APPEND VK_SRC_FILES
     ${SRC_PATH}/cinder/vk/Environment.cpp
     ${SRC_PATH}/cinder/vk/Descriptor.cpp
     ${SRC_PATH}/cinder/vk/Device.cpp
-    ${SRC_PATH}/cinder/vk/DeviceChildObject.cpp
+    ${SRC_PATH}/cinder/vk/ChildObject.cpp
     ${SRC_PATH}/cinder/vk/DeviceDispatchTable.cpp
     ${SRC_PATH}/cinder/vk/Image.cpp
     ${SRC_PATH}/cinder/vk/InstanceDispatchTable.cpp

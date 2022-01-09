@@ -158,8 +158,9 @@ void BufferedMeshGeomTarget::copyIndices( geom::Primitive /*primitive*/, const u
 		std::unique_ptr<uint16_t[]> indices( new uint16_t[numIndices] );
 		copyIndexData( source, numIndices, indices.get() );
 		if ( !mMesh->mIndices ) {
-			vk::Buffer::Usage usage = vk::Buffer::Usage().indexBuffer().transferSrc().transferDst();
-			mMesh->mIndices			= vk::Buffer::create( srcDataSize, indices.get(), usage, vk::MemoryUsage::GPU_ONLY, mMesh->getDevice() );
+			vk::Buffer::Usage	usage	= vk::Buffer::Usage().indexBuffer().transferSrc().transferDst();
+			vk::Buffer::Options options = vk::Buffer::Options();
+			mMesh->mIndices				= vk::Buffer::create( srcDataSize, indices.get(), usage, vk::MemoryUsage::GPU_ONLY, options, mMesh->getDevice() );
 		}
 		else {
 			mMesh->mIndices->copyData( srcDataSize, indices.get() );
@@ -171,8 +172,9 @@ void BufferedMeshGeomTarget::copyIndices( geom::Primitive /*primitive*/, const u
 		std::unique_ptr<uint32_t[]> indices( new uint32_t[numIndices] );
 		copyIndexData( source, numIndices, indices.get() );
 		if ( !mMesh->mIndices ) {
-			vk::Buffer::Usage usage = vk::Buffer::Usage().indexBuffer().transferSrc().transferDst();
-			mMesh->mIndices			= vk::Buffer::create( srcDataSize, indices.get(), usage, vk::MemoryUsage::GPU_ONLY, mMesh->getDevice() );
+			vk::Buffer::Usage	usage	= vk::Buffer::Usage().indexBuffer().transferSrc().transferDst();
+			vk::Buffer::Options options = vk::Buffer::Options();
+			mMesh->mIndices				= vk::Buffer::create( srcDataSize, indices.get(), usage, vk::MemoryUsage::GPU_ONLY, options, mMesh->getDevice() );
 		}
 		else {
 			mMesh->mIndices->copyData( srcDataSize, indices.get() );
@@ -267,7 +269,8 @@ void BufferedMesh::Layout::allocate( vk::DeviceRef device, size_t numVertices, g
 		}
 		else { // else allocate
 			vk::Buffer::Usage usage = vk::Buffer::Usage().vertexBuffer().transferSrc().transferDst();
-			*resultVertexBuffer		= vk::Buffer::create( totalDataBytes, usage, vk::MemoryUsage::GPU_ONLY, device );
+			vk::Buffer::Options options = vk::Buffer::Options();
+			*resultVertexBuffer		= vk::Buffer::create( totalDataBytes, usage, vk::MemoryUsage::GPU_ONLY, options, device );
 		}
 	}
 }

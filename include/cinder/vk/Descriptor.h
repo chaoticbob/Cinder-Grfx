@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/ChildObject.h"
 
 namespace cinder::vk {
 

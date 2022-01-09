@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/ChildObject.h"
 #include "cinder/vk/Pipeline.h"
 #include "cinder/Camera.h"
 #include "cinder/CinderGlm.h"
@@ -23,7 +23,7 @@ private:
 		{
 			bool				 inUse;
 			vk::DescriptorSetRef descriptorSet;
-			vk::BufferRef		 defaultUniformBuffer;
+			// vk::BufferRef		 defaultUniformBuffer;
 		};
 
 		vk::DescriptorPoolRef descriptorPool;
@@ -46,7 +46,7 @@ private:
 		// void nextDefaultUniformBuffer();
 
 		void resetDrawCalls();
-		void nextDrawCall( const vk::DescriptorSetLayoutRef& defaultSetLayout );
+		void nextDrawCall( const vk::DescriptorSetLayoutRef &defaultSetLayout );
 	};
 
 public:
@@ -139,6 +139,7 @@ public:
 	vk::CommandBuffer *getCommandBuffer() const { return getCurrentFrame().commandBuffer.get(); }
 
 	uint32_t			 getFrameIndex() const { return mFrameIndex; }
+	uint32_t			 getNumFramesInFlight() const { return mNumFramesInFlight; }
 	uint32_t			 getNumRenderTargets() const { return countU32( mRenderTargetFormats ); }
 	const vk::ImageView *getRenderTargetView( uint32_t index ) const { return getCurrentFrame().rtvs[index].get(); }
 	const vk::ImageView *getDepthStencilView() const { return getCurrentFrame().dsv.get(); }

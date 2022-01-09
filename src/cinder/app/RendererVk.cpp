@@ -15,7 +15,8 @@
 
 namespace cinder::app {
 
-static RendererVk		  *sMainRenderer				  = nullptr;
+static RendererVk *sMainRenderer = nullptr;
+
 thread_local RendererVk *RendererVk::sCurrentRenderer = nullptr;
 
 struct RendererVk::Frame
@@ -48,6 +49,11 @@ RendererVk *RendererVk::getCurrentRenderer()
 vk::DeviceRef RendererVk::getDevice() const
 {
 	return mDevice;
+}
+
+vk::ContextRef RendererVk::getContext() const
+{
+	return mContext;
 }
 
 vk::SwapchainRef RendererVk::getSwapchain() const

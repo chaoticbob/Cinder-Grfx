@@ -10,7 +10,7 @@
 #include "cinder/vk/ShaderProg.h"
 #include "cinder/vk/Sync.h"
 #include "cinder/vk/Texture.h"
-#include "cinder/vk/UniformBlock.h"
+#include "cinder/vk/UniformBuffer.h"
 #include "cinder/vk/Util.h"
 #include "cinder/vk/wrapper.h"
 #include "cinder/app/App.h"
@@ -86,8 +86,9 @@ void Context::Frame::nextDrawCall( const vk::DescriptorSetLayoutRef &defaultSetL
 
 		drawCall->descriptorSet = vk::DescriptorSet::create( descriptorPool, defaultSetLayout );
 
-		vk::Buffer::Usage usage		   = vk::Buffer::Usage().uniformBuffer();
-		drawCall->defaultUniformBuffer = vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, commandBuffer->getDevice() );
+		//vk::Buffer::Usage usage		   = vk::Buffer::Usage().uniformBuffer();
+		//vk::Buffer::Options options = vk::Buffer::Options();
+		//drawCall->defaultUniformBuffer = vk::Buffer::create( 1024, usage, vk::MemoryUsage::CPU_ONLY, options, commandBuffer->getDevice() );
 
 		currentDrawCall		   = drawCall.get();
 		currentDrawCall->inUse = true;
@@ -524,7 +525,8 @@ void Context::bindShaderProg( vk::ShaderProgRef prog )
 	auto block = mShaderProgram->getDefaultUniformBlock();
 	if ( block ) {
 		// mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().defaultUniformBuffer.get() );
-		mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().currentDrawCall->defaultUniformBuffer.get() );
+		// mDescriptorState.bindUniformBuffer( block->getBinding(), getCurrentFrame().currentDrawCall->defaultUniformBuffer.get() );
+		mDescriptorState.bindUniformBuffer( block->getBinding(), mShaderProgram->getDefaultUniformBuffer()->getBindableBuffer() );
 	}
 }
 
@@ -729,96 +731,83 @@ void Context::setDefaultShaderVars()
 		return;
 	}
 
-	// vk::Buffer *pBuffer = getCurrentFrame().defaultUniformBuffer.get();
-	vk::Buffer *pBuffer = getCurrentFrame().currentDrawCall->defaultUniformBuffer.get();
-
-	char *pMappedAddress = nullptr;
-	pBuffer->map( reinterpret_cast<void **>( &pMappedAddress ) );
+	auto pBuffer = mShaderProgram->getDefaultUniformBuffer();
 
 	const auto &uniforms = mShaderProgram->getDefaultUniformBlock()->getUniforms();
 	for ( const auto &uniform : uniforms ) {
-		const size_t offset = uniform.getOffset();
-		char		 *dst	= pMappedAddress + offset;
-
 		switch ( uniform.getUniformSemantic() ) {
 			default: break;
 			case UNIFORM_MODEL_MATRIX: {
 				auto model = vk::getModelMatrix();
-				memcpy( dst, &model, sizeof( model ) );
+				pBuffer->uniform( uniform.getName(), model );
 			} break;
 			case UNIFORM_MODEL_MATRIX_INVERSE: {
 				auto inverseModel = glm::inverse( vk::getModelMatrix() );
-				memcpy( dst, &inverseModel, sizeof( inverseModel ) );
+				pBuffer->uniform( uniform.getName(), inverseModel );
 			} break;
 			case UNIFORM_MODEL_MATRIX_INVERSE_TRANSPOSE: {
 				auto modelInverseTranspose = vk::calcModelMatrixInverseTranspose();
-				memcpy( dst, &modelInverseTranspose, sizeof( modelInverseTranspose ) );
+				pBuffer->uniform( uniform.getName(), modelInverseTranspose );
 			} break;
 			case UNIFORM_VIEW_MATRIX: {
 				auto view = vk::getViewMatrix();
-				memcpy( dst, &view, sizeof( view ) );
+				pBuffer->uniform( uniform.getName(), view );
 			} break;
 			case UNIFORM_VIEW_MATRIX_INVERSE: {
 				auto viewInverse = vk::calcViewMatrixInverse();
-				memcpy( dst, &viewInverse, sizeof( viewInverse ) );
+				pBuffer->uniform( uniform.getName(), viewInverse );
 			} break;
 			case UNIFORM_MODEL_VIEW: {
 				auto modelView = vk::getModelView();
-				memcpy( dst, &modelView, sizeof( modelView ) );
+				pBuffer->uniform( uniform.getName(), modelView );
 			} break;
 			case UNIFORM_MODEL_VIEW_INVERSE: {
 				auto modelViewInverse = glm::inverse( vk::getModelView() );
-				memcpy( dst, &modelViewInverse, sizeof( modelViewInverse ) );
+				pBuffer->uniform( uniform.getName(), modelViewInverse );
 			} break;
 			case UNIFORM_MODEL_VIEW_INVERSE_TRANSPOSE: {
 				auto normalMatrix = vk::calcNormalMatrix();
-				memcpy( dst, &normalMatrix, sizeof( normalMatrix ) );
+				pBuffer->uniform( uniform.getName(), normalMatrix );
 			} break;
 			case UNIFORM_MODEL_VIEW_PROJECTION: {
 				auto modelViewProjection = vk::getModelViewProjection();
-				memcpy( dst, &modelViewProjection, sizeof( modelViewProjection ) );
+				pBuffer->uniform( uniform.getName(), modelViewProjection );
 			} break;
 			case UNIFORM_MODEL_VIEW_PROJECTION_INVERSE: {
 				auto modelViewProjectionInverse = glm::inverse( vk::getModelViewProjection() );
-				memcpy( dst, &modelViewProjectionInverse, sizeof( modelViewProjectionInverse ) );
+				pBuffer->uniform( uniform.getName(), modelViewProjectionInverse );
 			} break;
 			case UNIFORM_PROJECTION_MATRIX: {
 				auto projection = vk::getProjectionMatrix();
-				memcpy( dst, &projection, sizeof( projection ) );
+				pBuffer->uniform( uniform.getName(), projection );
 			} break;
 			case UNIFORM_PROJECTION_MATRIX_INVERSE: {
 				auto projectionInverse = glm::inverse( vk::getProjectionMatrix() );
-				memcpy( dst, &projectionInverse, sizeof( projectionInverse ) );
+				pBuffer->uniform( uniform.getName(), projectionInverse );
 			} break;
 			case UNIFORM_VIEW_PROJECTION: {
 				auto viewProjection = vk::getProjectionMatrix() * vk::getViewMatrix();
-				memcpy( dst, &viewProjection, sizeof( viewProjection ) );
+				pBuffer->uniform( uniform.getName(), viewProjection );
 			} break;
 			case UNIFORM_NORMAL_MATRIX: {
-				auto		normalMatrix = vk::calcNormalMatrix();
-				const char *src			 = reinterpret_cast<const char *>( &normalMatrix );
-				memcpy( dst + 0 * 16, src + 0 * 12, 12 );
-				memcpy( dst + 1 * 16, src + 1 * 12, 12 );
-				memcpy( dst + 2 * 16, src + 2 * 12, 12 );
-				// memcpy( dst, &normalMatrix, sizeof( normalMatrix ) );
+				auto normalMatrix = vk::calcNormalMatrix();
+				pBuffer->uniform( uniform.getName(), normalMatrix );
 			} break;
 			case UNIFORM_VIEWPORT_MATRIX: {
 				auto viewport = vk::calcViewportMatrix();
-				memcpy( dst, &viewport, sizeof( viewport ) );
+				pBuffer->uniform( uniform.getName(), viewport );
 			} break;
 			case UNIFORM_WINDOW_SIZE: {
 				auto windowSize = app::getWindowSize();
-				memcpy( dst, &windowSize, sizeof( windowSize ) );
+				pBuffer->uniform( uniform.getName(), windowSize );
 			} break;
 			case UNIFORM_ELAPSED_SECONDS: {
 				auto elapsed = float( app::getElapsedSeconds() );
-				memcpy( dst, &elapsed, sizeof( elapsed ) );
+				pBuffer->uniform( uniform.getName(), elapsed );
 				break;
 			}
 		}
 	}
-
-	pBuffer->unmap();
 }
 
 void Context::clearColorAttachment( uint32_t index )
@@ -923,8 +912,8 @@ void Context::assignVertexAttributeLocations()
 				  programVertexAttributes.begin(),
 				  programVertexAttributes.end(),
 				  [semantic]( const vk::InterfaceVariable &elem ) -> bool {
-					  bool isSame = ( elem.getSemantic() == semantic );
-					  return isSame;
+								  bool isSame = ( elem.getSemantic() == semantic );
+								  return isSame;
 				  } );
 			// Skip if shader doesn't use this attribute
 			if ( it == programVertexAttributes.end() ) {

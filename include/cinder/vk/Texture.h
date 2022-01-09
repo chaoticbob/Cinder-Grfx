@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cinder/vk/DeviceChildObject.h"
+#include "cinder/vk/ChildObject.h"
 #include "cinder/DataSource.h"
 #include "cinder/ImageIo.h"
 #include "cinder/Surface.h"
