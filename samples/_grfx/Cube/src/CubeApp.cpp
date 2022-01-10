@@ -28,8 +28,6 @@ public:
 
 void RotatingCubeApp::setup()
 {
-	vk::Pipeline::Options options = vk::Pipeline::Options();
-
 	mCam.lookAt( vec3( 3, 2, 4 ), vec3( 0 ) );
 
 	try {

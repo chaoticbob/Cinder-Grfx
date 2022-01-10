@@ -10,6 +10,9 @@
 
 namespace cinder::vk {
 
+using VboMesh = BufferedMesh;
+using VboMeshRef = BufferedMeshRef;
+
 class BufferedMesh
 	: vk::DeviceChildObject
 {
@@ -48,6 +51,8 @@ public:
 		friend class vk::BufferedMesh;
 	};
 
+	//! Creates a VboMesh which represents the geom::Source \a source. Layout is derived from the contents of \a source.
+	static vk::BufferedMeshRef create( const geom::Source &source, vk::DeviceRef device = nullptr );
 	//! Creates a BufferedMesh which represents the geom::Source \a source using 1 or more BufferedMesh::Layouts for vertex data.
 	static vk::BufferedMeshRef create( const geom::Source &source, const std::vector<vk::BufferedMesh::Layout> &layouts, vk::DeviceRef device = nullptr );
 	//! Creates a BufferedMesh which represents the geom::Source \a source using \a layout.

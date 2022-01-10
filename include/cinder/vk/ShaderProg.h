@@ -199,9 +199,9 @@ public:
 
 	const std::map<uint32_t, std::vector<DescriptorBinding>> &getSetBindings() const { return mSetBindings; }
 
-	const vk::UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
+	// const vk::UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
 
-	vk::UniformBuffer *getDefaultUniformBuffer() const { return mDefaultUniformBuffer; }
+	const std::vector<vk::UniformBufferRef> &getDefaultUniformBuffers() const { return mDefaultUniformBuffers; }
 
 	void uniform( const std::string &name, bool value );
 	void uniform( const std::string &name, int32_t value );
@@ -252,8 +252,10 @@ private:
 	void parseDscriptorBindings( const vk::ShaderModule *shader );
 	void parseUniformBlocks( const vk::ShaderModule *shader );
 
+	virtual void flightSync(uint32_t currentFrameIndex, uint32_t previousFrameIndex) override {}
+
 	template <typename T>
-	void setUniform(const std::string& name, const T& value);
+	void setUniform( const std::string &name, const T &value );
 
 private:
 	vk::ShaderModuleRef mVs; // Vertex
@@ -267,9 +269,9 @@ private:
 	std::map<uint32_t, std::vector<vk::DescriptorBinding>> mSetBindings;		// Set:bindings
 	std::map<std::string, vk::DescriptorBinding *>		   mDescriptorBindings; // Name:binding
 	std::vector<vk::UniformBlockRef>					   mUniformBlocks;
-	vk::UniformBlock									  *mDefaultUniformBlock = nullptr;
-	std::map<std::string, vk::UniformBufferRef>			   mUniformBuffers;
-	vk::UniformBuffer									 *mDefaultUniformBuffer = nullptr;
+	std::vector<vk::UniformBlockRef>					   mDefaultUniformBlocks;
+	std::vector<vk::UniformBufferRef>					   mUniformBuffers;
+	std::vector<vk::UniformBufferRef>					   mDefaultUniformBuffers;
 	std::map<std::string, vk::UniformBufferRef>			   mUniforNameToBuffer;
 };
 
@@ -280,27 +282,50 @@ class GlslProg
 	: public vk::ShaderProg
 {
 public:
+	struct CI_API Format
+	{
+		Format() {}
+
+		Format &vertex( const DataSourceRef &dataSource );
+		Format &fragment( const DataSourceRef &dataSource );
+		Format &geometry( const DataSourceRef &dataSource );
+		Format &tessellationCtrl( const DataSourceRef &dataSource );
+		Format &tessellationEval( const DataSourceRef &dataSource );
+
+	private:
+		DataSourceRef mVert;
+		DataSourceRef mFrag;
+		DataSourceRef mGeom;
+		DataSourceRef mTesc;
+		DataSourceRef mTese;
+
+		friend class vk::GlslProg;
+	};
+
 	virtual ~GlslProg();
 
-	// Create GLSL prog from data source using current context's device
+	// Create GLSL prog from Format using the current context
+	static vk::GlslProgRef create( const vk::GlslProg::Format &format );
+
+	// Create GLSL prog from data source using current context
 	static GlslProgRef create(
 		const DataSourceRef	&vsOrCsTextDataSource,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
-	static GlslProgRef create(
+	static vk::GlslProgRef create(
 		const DataSourceRef &vsTextDataSource,
 		const DataSourceRef &psTextDataSource,
 		const DataSourceRef &gsTextDataSource = nullptr,
 		const DataSourceRef &dsTextDataSource = nullptr,
 		const DataSourceRef &hsTextDataSource = nullptr );
 
-	// Create GLSL prog from data source using device
-	static GlslProgRef create(
+	// Create GLSL prog from data source using context
+	static vk::GlslProgRef create(
 		vk::ContextRef		  context,
 		const DataSourceRef	&vsOrCsTextDataSource,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
-	static GlslProgRef create(
+	static vk::GlslProgRef create(
 		vk::ContextRef		 context,
 		const DataSourceRef &vsTextDataSource,
 		const DataSourceRef &psTextDataSource,
@@ -308,33 +333,31 @@ public:
 		const DataSourceRef &dsTextDataSource = nullptr,
 		const DataSourceRef &hsTextDataSource = nullptr );
 
-	// Create GLSL prog from text source code using current context's device
-	static GlslProgRef create(
+	// Create GLSL prog from text source code using current context
+	static vk::GlslProgRef create(
 		const std::string	  &vsOrCsText,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
-	static GlslProgRef create(
+	static vk::GlslProgRef create(
 		const std::string &vsText,
 		const std::string &psText,
 		const std::string &gsText = "",
 		const std::string &dsText = "",
 		const std::string &hsText = "" );
 
-	// Create GLSL prog from text source code using device
-	static GlslProgRef create(
+	// Create GLSL prog from text source code using context
+	static vk::GlslProgRef create(
 		vk::ContextRef		  context,
 		const std::string	  &vsOrCsText,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
 
-	static GlslProgRef create(
+	static vk::GlslProgRef create(
 		vk::ContextRef	   context,
 		const std::string &vsText,
 		const std::string &psText,
 		const std::string &gsText = "",
 		const std::string &dsText = "",
 		const std::string &hsText = "" );
-
-	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
 
 private:
 	GlslProg(
@@ -354,9 +377,6 @@ private:
 		vk::DeviceRef		  device,
 		std::string			  text,
 		VkShaderStageFlagBits stage );
-
-private:
-	vk::ShaderProgRef mShaderProg;
 };
 
 //! @class HlslProg
@@ -381,7 +401,7 @@ public:
 
 	virtual ~HlslProg();
 
-	// Create HLSL prog from data source using current context's device
+	// Create HLSL prog from data source using current context
 	static HlslProgRef create(
 		const DataSourceRef	&vsOrCsTextDataSource,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
@@ -393,7 +413,7 @@ public:
 		const DataSourceRef &dsTextDataSource = nullptr,
 		const DataSourceRef &hsTextDataSource = nullptr );
 
-	// Create HLSL prog from data source using device
+	// Create HLSL prog from data source using context
 	static HlslProgRef create(
 		vk::DeviceRef		  device,
 		const DataSourceRef	&vsOrCsTextDataSource,
@@ -407,7 +427,7 @@ public:
 		const DataSourceRef &dsTextDataSource = nullptr,
 		const DataSourceRef &hsTextDataSource = nullptr );
 
-	// Create HLSL prog from text source code using current context's device
+	// Create HLSL prog from text source code using current context
 	static HlslProgRef create(
 		const std::string	  &vsOrCsText,
 		VkShaderStageFlagBits shaderStage = VK_SHADER_STAGE_COMPUTE_BIT );
@@ -419,7 +439,7 @@ public:
 		const std::string &dsText = "",
 		const std::string &hsText = "" );
 
-	// Create HLSL prog from text source code using device
+	// Create HLSL prog from text source code using context
 	static HlslProgRef create(
 		vk::ContextRef		  context,
 		const std::string	  &vsOrCsText,
@@ -432,8 +452,6 @@ public:
 		const std::string &gsText = "",
 		const std::string &dsText = "",
 		const std::string &hsText = "" );
-
-	vk::ShaderProgRef getShaderProg() const { return mShaderProg; }
 
 private:
 	HlslProg(
@@ -455,9 +473,6 @@ private:
 		VkShaderStageFlagBits	  shaderStage,
 		const std::string		  &entryPointName = "",
 		vk::HlslProg::ShaderModel shaderModel	 = vk::HlslProg::ShaderModel::SM_6_6 );
-
-private:
-	vk::ShaderProgRef mShaderProg;
 };
 
 } // namespace cinder::vk

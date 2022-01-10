@@ -4,8 +4,32 @@
 namespace cinder::vk {
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// ScopedTextureBind
+// ScopedGlslProg
+ScopedGlslProg::ScopedGlslProg( vk::GlslProgRef &prog )
+	: mCtx( vk::context() )
+{
+	mCtx->pushGlslProg( prog.get() );
+}
 
+ScopedGlslProg::ScopedGlslProg( const std::shared_ptr<const vk::GlslProg> &prog )
+	: mCtx( vk::context() )
+{
+	mCtx->pushGlslProg( std::const_pointer_cast<GlslProg>( prog ).get() );
+}
+
+ScopedGlslProg::ScopedGlslProg( const vk::GlslProg *prog )
+	: mCtx( vk::context() )
+{
+	mCtx->pushGlslProg( const_cast<vk::GlslProg *>( prog ) );
+}
+
+ScopedGlslProg::~ScopedGlslProg()
+{
+	mCtx->popGlslProg();
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// ScopedTextureBind
 ScopedTextureBind::ScopedTextureBind( const vk::TextureBaseRef &texture )
 	: mCtx( vk::context() )
 {

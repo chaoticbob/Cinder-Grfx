@@ -445,12 +445,35 @@ static vk::DataType dtermineDataType( const SpvReflectTypeDescription *pDesc )
 	return dataType;
 }
 
-static void parseSpirvUniformBlock( std::string prefix, const SpvReflectBlockVariable &spirvBlock, std::vector<Uniform> &uniforms )
+/*
+static void parseSpirvUniformBlock( std::string prefix, uint32_t initialOffset, const SpvReflectBlockVariable &spirvBlock, std::vector<Uniform> &uniforms )
 {
 	for ( uint32_t i = 0; i < spirvBlock.member_count; ++i ) {
 		const SpvReflectBlockVariable &member = spirvBlock.members[i];
 
 		if ( member.type_description->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) {
+			std::stringstream name;
+			if ( ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) && ( prefix != CI_VK_HLSL_GLOBALS_NAME ) ) {
+				name << prefix << ".";
+			}
+			name << member.name;
+
+			if ( member.type_description->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+				uint32_t arrayOffset = 0;
+				uint32_t arraySize	 = member.array.dims[0];
+				for ( uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx ) {
+					std::stringstream arrayName;
+					arrayName << name.str() << "[" << arrayIdx << "]";
+
+					for ( uint32_t memberIdx = 0; memberIdx < member.member_count; ++memberIdx ) {
+						parseSpirvUniformBlock( arrayName.str(), arrayOffset, member.members[memberIdx], uniforms );
+					}
+					arrayOffset += member.array.stride;
+				}
+			}
+			else {
+				parseSpirvUniformBlock( name.str(), 0, member, uniforms );
+			}
 		}
 		else {
 			std::stringstream name;
@@ -470,7 +493,7 @@ static void parseSpirvUniformBlock( std::string prefix, const SpvReflectBlockVar
 				uniformSemantic = it->second;
 			}
 
-			uint32_t offset = member.absolute_offset;
+			uint32_t offset = member.absolute_offset + initialOffset;
 
 			uint32_t arraySize	 = 1;
 			uint32_t arrayStride = 0;
@@ -487,6 +510,367 @@ static void parseSpirvUniformBlock( std::string prefix, const SpvReflectBlockVar
 		}
 	}
 }
+*/
+
+static void parseSpirvBlockVariable(
+	bool						   isGlsl,
+	SpvReflectTypeFlags			   parseAspect,
+	std::string					   prefix,
+	uint32_t					   initialOffset,
+	const SpvReflectBlockVariable &blockVar,
+	std::vector<Uniform>			 &uniforms )
+{
+	auto &typeDesc = blockVar.type_description;
+
+	if ( parseAspect & SPV_REFLECT_TYPE_FLAG_STRUCT ) {
+		std::string structName = blockVar.name;
+		if ( structName.empty() ) {
+			if ( isGlsl ) {
+				std::string typeName = spvReflectBlockVariableTypeName( &blockVar );
+				if ( typeName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+					structName = typeName;
+				}
+			}
+			else {
+				throw VulkanExc( "unexpected unnamed uniform block" );
+			}
+		}
+
+		for ( uint32_t memberIdx = 0; memberIdx < blockVar.member_count; ++memberIdx ) {
+			auto				 &memberVar		  = blockVar.members[memberIdx];
+			auto				 &memberTypeDesc	  = memberVar.type_description;
+			SpvReflectTypeFlags memberParseAspect = ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) ? SPV_REFLECT_TYPE_FLAG_ARRAY : 0;
+
+			std::stringstream memberPrefix;
+			if ( ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) && ( prefix != CI_VK_HLSL_GLOBALS_NAME ) ) {
+				memberPrefix << prefix << ".";
+			}
+			memberPrefix << memberVar.name;
+
+			parseSpirvBlockVariable( isGlsl, memberParseAspect, memberPrefix.str(), 0, memberVar, uniforms );
+
+			// if ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+			//	uint32_t arraySize = memberVar.array.dims[0];
+			//	for ( uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx ) {
+			//		parseSpirvBlockVariable( isGlsl, prefix, 0, memberVar, uniforms );
+			//	}
+			// }
+			// else {
+			//	parseSpirvBlockVariable( isGlsl, prefix, 0, memberVar, uniforms );
+			// }
+		}
+	}
+	else if ( parseAspect & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+		uint32_t arraySize = blockVar.array.dims[0];
+		for ( uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx ) {
+			std::stringstream arrayPrefix;
+			arrayPrefix << prefix << "[" << arrayIdx << "]";
+
+			SpvReflectTypeFlags elemParseAspect = ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) ? SPV_REFLECT_TYPE_FLAG_STRUCT : 0;
+			parseSpirvBlockVariable( isGlsl, elemParseAspect, arrayPrefix.str(), 0, blockVar, uniforms );
+		}
+	}
+	else {
+		vk::DataType dataType = dtermineDataType( blockVar.type_description );
+		if ( dataType == vk::DataType::UNKNOWN ) {
+			throw VulkanExc( "failed to determine data type for uniform variable" );
+		}
+
+		std::stringstream name;
+		if ( ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) && ( prefix != CI_VK_HLSL_GLOBALS_NAME ) ) {
+			name << prefix << ".";
+		}
+		name << blockVar.name;
+
+		vk::UniformSemantic uniformSemantic = vk::UniformSemantic::UNIFORM_USER_DEFINED;
+		auto				it				= sDefaultUniformNameToSemanticMap.find( name.str() );
+		if ( it != sDefaultUniformNameToSemanticMap.end() ) {
+			uniformSemantic = it->second;
+		}
+
+		uint32_t offset = blockVar.absolute_offset + initialOffset;
+
+		uint32_t arraySize	 = 1;
+		uint32_t arrayStride = 0;
+		if ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+			for ( uint32_t j = 0; j < blockVar.array.dims_count; ++j ) {
+				uint32_t dim = blockVar.array.dims[j];
+				arraySize *= dim;
+			}
+
+			arrayStride = blockVar.array.stride;
+		}
+
+		uniforms.emplace_back( name.str(), dataType, uniformSemantic, offset, arraySize );
+	}
+
+	/*
+		// std::stringstream name;
+		// if ( ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) && ( prefix != CI_VK_HLSL_GLOBALS_NAME ) ) {
+		//	name << prefix << ".";
+		// }
+		// name << blockVar.name;
+
+		auto &typeDesc = blockVar.type_description;
+		if ( ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) && ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) ) {
+			// std::string prefix = blockVar.name;
+			// if ( prefix.empty() ) {
+			//	if ( isGlsl ) {
+			//		std::string typeName = spvReflectBlockVariableTypeName( &blockVar );
+			//		if ( typeName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+			//			prefix = typeName;
+			//		}
+			//	}
+			//	else {
+			//		throw VulkanExc( "unexpected unnamed uniform block" );
+			//	}
+			// }
+			//
+			// for ( uint32_t memberIdx = 0; memberIdx < blockVar.member_count; ++memberIdx ) {
+			//	auto &memberVar		 = blockVar.members[memberIdx];
+			//	auto &memberTypeDesc = memberVar.type_description;
+			//	if ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+			//		uint32_t arraySize = memberVar.array.dims[0];
+			//		for ( uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx ) {
+			//			parseSpirvBlockVariable( isGlsl, prefix, 0, memberVar, uniforms );
+			//		}
+			//	}
+			//	else {
+			//		parseSpirvBlockVariable( isGlsl, prefix, 0, memberVar, uniforms );
+			//	}
+			// }
+		}
+		else if ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) {
+		}
+		else if ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+		}
+		else {
+			vk::DataType dataType = dtermineDataType( blockVar.type_description );
+			if ( dataType == vk::DataType::UNKNOWN ) {
+				throw VulkanExc( "failed to determine data type for uniform variable" );
+			}
+
+			std::stringstream name;
+			if ( ( prefix != CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) && ( prefix != CI_VK_HLSL_GLOBALS_NAME ) ) {
+				name << prefix << ".";
+			}
+			name << blockVar.name;
+
+			vk::UniformSemantic uniformSemantic = vk::UniformSemantic::UNIFORM_USER_DEFINED;
+			auto				it				= sDefaultUniformNameToSemanticMap.find( name.str() );
+			if ( it != sDefaultUniformNameToSemanticMap.end() ) {
+				uniformSemantic = it->second;
+			}
+
+			uint32_t offset = blockVar.absolute_offset + initialOffset;
+
+			uint32_t arraySize	 = 1;
+			uint32_t arrayStride = 0;
+			if ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+				for ( uint32_t j = 0; j < blockVar.array.dims_count; ++j ) {
+					uint32_t dim = blockVar.array.dims[j];
+					arraySize *= dim;
+				}
+
+				arrayStride = blockVar.array.stride;
+			}
+
+			uniforms.emplace_back( name.str(), dataType, uniformSemantic, offset, arraySize );
+		}
+	*/
+}
+
+static void parseUniform( const std::string &name, bool useAbsoluteOffset, uint32_t initialOffset, const SpvReflectBlockVariable &var, std::vector<Uniform> &uniforms )
+{
+	auto &typeDesc = var.type_description;
+
+	vk::DataType dataType = dtermineDataType( typeDesc );
+	if ( dataType == vk::DataType::UNKNOWN ) {
+		throw VulkanExc( "failed to determine data type for uniform variable" );
+	}
+	//
+	// bool isGlslDefaultUniformBlock = ( prefix == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME );
+	// bool isHlslGlobals			   = ( prefix == CI_VK_HLSL_GLOBALS_NAME );
+	//
+	// std::stringstream name;
+	// if ( !prefix.empty() && !( isGlslDefaultUniformBlock || isHlslGlobals ) ) {
+	//	name << prefix << ".";
+	//}
+	// name << var.name;
+	//
+	// if ( arrayIndex >= 0 ) {
+	//	name << "[" << arrayIndex << "]";
+	//}
+
+	vk::UniformSemantic uniformSemantic = vk::UniformSemantic::UNIFORM_USER_DEFINED;
+	auto				it				= sDefaultUniformNameToSemanticMap.find( name );
+	if ( it != sDefaultUniformNameToSemanticMap.end() ) {
+		uniformSemantic = it->second;
+	}
+
+	uint32_t offset = initialOffset;
+	offset += useAbsoluteOffset ? var.absolute_offset : var.offset;
+
+	uint32_t arraySize = 1;
+	if ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+		for ( uint32_t j = 0; j < var.array.dims_count; ++j ) {
+			uint32_t dim = var.array.dims[j];
+			arraySize *= dim;
+		}
+	}
+
+	uniforms.emplace_back( name, dataType, uniformSemantic, offset, arraySize );
+}
+
+static void parseUniformBlockVariable( const std::string &prefix, const SpvReflectBlockVariable &var, std::vector<Uniform> &uniforms )
+{
+	bool isGlslDefaultUniformBlock = ( prefix == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME );
+	bool isHlslGlobals			   = ( prefix == CI_VK_HLSL_GLOBALS_NAME );
+
+	auto &typeDesc = var.type_description;
+
+	if ( ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) && ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) ) {
+		uint32_t arraySize	 = var.array.dims[0];
+		uint32_t arrayOffset = var.absolute_offset;
+		for ( uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx ) {
+			std::stringstream arrayPrefix;
+			if ( !prefix.empty() && !( isGlslDefaultUniformBlock || isHlslGlobals ) ) {
+				arrayPrefix << prefix << ".";
+			}
+			arrayPrefix << var.name << "[" << arrayIdx << "]";
+
+			for ( uint32_t memberIdx = 0; memberIdx < var.member_count; ++memberIdx ) {
+				auto &memberVar		 = var.members[memberIdx];
+				auto &memberTypeDesc = memberVar.type_description;
+
+				std::stringstream name;
+				name << arrayPrefix.str() << "." << memberVar.name;
+
+				parseUniform( name.str(), false, arrayOffset, memberVar, uniforms );
+			}
+
+			arrayOffset += var.array.stride;
+		}
+
+		// for ( uint32_t memberIdx = 0; memberIdx < var.member_count; ++memberIdx ) {
+		//	auto &memberVar		 = var.members[memberIdx];
+		//	auto &memberTypeDesc = memberVar.type_description;
+		//
+		//	if ( ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) || ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) ) {
+		//		parseUniformBlockVariable( structPrefix.str(), memberVar, uniforms );
+		//	}
+		//
+		//	//parseUniformBlockVariable( nextParseAspect, structPrefix.str(), memberVar, uniforms );
+		// }
+
+		// if ( !prefix.empty() ) {
+		//	structPrefix << prefix << ".";
+		// }
+
+		// std::stringstream structPrefix;
+		// if ( !prefix.empty() ) {
+		//	structPrefix << prefix << ".";
+		// }
+		// structPrefix << var.name;
+		//
+		////for ( uint32_t memberIdx = 0; memberIdx < var.member_count; ++memberIdx ) {
+		////	auto				 &memberVar		= var.members[memberIdx];
+		////	auto				 &memberTypeDesc	= memberVar.type_description;
+		////	SpvReflectTypeFlags nextParseAspect = ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) ? SPV_REFLECT_TYPE_FLAG_ARRAY : 0;
+		////
+		////	parseUniformBlockVariable( nextParseAspect, structPrefix.str(), memberVar, uniforms );
+		////}
+	}
+	else if ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) {
+		std::stringstream structPrefix;
+		if ( !prefix.empty() ) {
+			structPrefix << prefix << ".";
+		}
+		structPrefix << var.name;
+
+		for ( uint32_t memberIdx = 0; memberIdx < var.member_count; ++memberIdx ) {
+			auto &memberVar		 = var.members[memberIdx];
+			auto &memberTypeDesc = memberVar.type_description;
+			if ( ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) || ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) ) {
+				parseUniformBlockVariable( structPrefix.str(), memberVar, uniforms );
+			}
+			else {
+				std::stringstream name;
+				name << structPrefix.str();
+
+				parseUniform( name.str(), false, 0, memberVar, uniforms );
+			}
+		}
+
+		// uint32_t arraySize = var.array.dims[0];
+		// for ( uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx ) {
+		//	SpvReflectTypeFlags nextParseAspect = ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) ? SPV_REFLECT_TYPE_FLAG_STRUCT : 0;
+		//
+		//	std::stringstream arrayPrefix;
+		//	arrayPrefix << prefix << "[" << arrayIdx << "]";
+		//
+		//	parseUniformBlockVariable( nextParseAspect, arrayPrefix.str(), var, uniforms );
+		// }
+	}
+	else if ( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) {
+		uint32_t arraySize	 = var.array.dims[0];
+		uint32_t arrayOffset = 0;
+		for ( uint32_t arrayIdx = 0; arrayIdx < arraySize; ++arrayIdx ) {
+			std::stringstream name;
+			name << var.name << "[" << arrayIdx << "]";
+
+			parseUniform( name.str(), false, arrayOffset, var, uniforms );
+			arrayOffset += var.array.stride;
+
+			// auto &memberVar		 = var.members[memberIdx];
+			// auto &memberTypeDesc = memberVar.type_description;
+			// if ( ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) || ( memberTypeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_ARRAY ) ) {
+			//	parseUniformBlockVariable( structPrefix.str(), memberVar, uniforms );
+			// }
+			// else {
+			//	parseUniform( structPrefix.str(), memberVar, uniforms );
+			// }
+		}
+	}
+	else {
+		std::stringstream name;
+		if ( !prefix.empty() && !( isGlslDefaultUniformBlock || isHlslGlobals ) ) {
+			name << prefix << ".";
+		}
+		name << var.name;
+
+		parseUniform( name.str(), false, 0, var, uniforms );
+	}
+}
+
+static void parseUniformBlock( bool isGlsl, const SpvReflectBlockVariable &block, std::vector<Uniform> &uniforms )
+{
+	auto &typeDesc = block.type_description;
+
+	// 'block' should always be a struct
+	if ( !( typeDesc->type_flags & SPV_REFLECT_TYPE_FLAG_STRUCT ) ) {
+		throw VulkanExc( "unexpected non-struct uniform block" );
+	}
+
+	std::string prefix = block.name;
+	if ( prefix.empty() ) {
+		if ( isGlsl ) {
+			std::string typeName = spvReflectBlockVariableTypeName( &block );
+			if ( typeName == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) {
+				prefix = typeName;
+			}
+		}
+		else {
+			throw VulkanExc( "unexpected unnamed uniform block" );
+		}
+	}
+
+	for ( uint32_t memberIdx = 0; memberIdx < block.member_count; ++memberIdx ) {
+		auto &memberVar		 = block.members[memberIdx];
+		auto &memberTypeDesc = memberVar.type_description;
+		parseUniformBlockVariable( prefix, memberVar, uniforms );
+	}
+}
 
 void ShaderModule::parseUniformBlocks( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings )
 {
@@ -498,6 +882,9 @@ void ShaderModule::parseUniformBlocks( const std::vector<SpvReflectDescriptorBin
 		if ( pSpvBinding->descriptor_type != SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER ) {
 			continue;
 		}
+
+		std::vector<Uniform> uniforms;
+		parseUniformBlock( isGlsl, pSpvBinding->block, uniforms );
 
 		std::string name = pSpvBinding->block.name;
 		if ( name.empty() ) {
@@ -511,9 +898,6 @@ void ShaderModule::parseUniformBlocks( const std::vector<SpvReflectDescriptorBin
 				throw VulkanExc( "unexpected unnamed uniform block" );
 			}
 		}
-
-		std::vector<Uniform> uniforms;
-		parseSpirvUniformBlock( name, pSpvBinding->block, uniforms );
 
 		auto uniformBlock = std::make_unique<UniformBlock>( name, pSpvBinding->block.size, pSpvBinding->binding, pSpvBinding->set, uniforms );
 
@@ -922,7 +1306,7 @@ void ShaderProg::parseModules()
 	parseDscriptorBindings( mCs.get() );
 
 	mUniformBlocks.clear();
-	mDefaultUniformBlock = nullptr;
+	mDefaultUniformBlocks.clear();
 	parseUniformBlocks( mVs.get() );
 	parseUniformBlocks( mPs.get() );
 	parseUniformBlocks( mGs.get() );
@@ -930,14 +1314,19 @@ void ShaderProg::parseModules()
 	parseUniformBlocks( mHs.get() );
 	parseUniformBlocks( mCs.get() );
 
+	mUniformBuffers.clear();
+	mDefaultUniformBuffers.clear();
 	for ( auto &block : mUniformBlocks ) {
 		auto					  &name	   = block->getName();
 		vk::UniformBuffer::Options options = vk::UniformBuffer::Options().cpuOnly();
 		vk::UniformBufferRef	   buffer  = vk::UniformBuffer::create( block, options, getContext() );
-		mUniformBuffers[name]			   = buffer;
 
-		if ( ( mDefaultUniformBuffer == nullptr ) && ( name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( name == CI_VK_HLSL_GLOBALS_NAME ) ) {
-			mDefaultUniformBuffer = buffer.get();
+		// if ( ( mDefaultUniformBuffer == nullptr ) && ( name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( name == CI_VK_HLSL_GLOBALS_NAME ) ) {
+		//	mDefaultUniformBuffer = buffer.get();
+		// }
+
+		if ( ( name == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( name == CI_VK_HLSL_GLOBALS_NAME ) ) {
+			mDefaultUniformBuffers.push_back( buffer );
 		}
 
 		auto &uniforms = block->getUniforms();
@@ -1015,6 +1404,7 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 
 	auto &blocks = shader->getUniformBlocks();
 	for ( const auto &block : blocks ) {
+		/*
 		if ( ( block->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( block->getName() == CI_VK_HLSL_GLOBALS_NAME ) ) {
 			// Add default uniform block if we don't have one...
 			if ( mDefaultUniformBlock == nullptr ) {
@@ -1082,6 +1472,13 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 				}
 			}
 		}
+		*/
+
+		if ( ( block->getName() == CI_VK_DEFAULT_UNIFORM_BLOCK_NAME ) || ( block->getName() == CI_VK_HLSL_GLOBALS_NAME ) ) {
+			mDefaultUniformBlocks.push_back( block );
+		}
+
+		mUniformBlocks.push_back( block );
 	}
 }
 
@@ -1138,17 +1535,17 @@ void ShaderProg::uniform( const std::string &name, bool value )
 
 void ShaderProg::uniform( const std::string &name, int32_t value )
 {
-	setUniform<bool>( name, value );
+	setUniform<int32_t>( name, value );
 }
 
 void ShaderProg::uniform( const std::string &name, uint32_t value )
 {
-	setUniform<bool>( name, value );
+	setUniform<uint32_t>( name, value );
 }
 
 void ShaderProg::uniform( const std::string &name, float value )
 {
-	setUniform<bool>( name, value );
+	setUniform<float>( name, value );
 }
 
 void ShaderProg::uniform( const std::string &name, const glm::vec2 &value )
@@ -1213,6 +1610,41 @@ void ShaderProg::uniform( const std::string &name, const glm::mat4x4 &value )
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GlslProg
+
+vk::GlslProg::Format &GlslProg::Format::vertex( const DataSourceRef &dataSource )
+{
+	mVert = dataSource;
+	return *this;
+}
+
+vk::GlslProg::Format &GlslProg::Format::fragment( const DataSourceRef &dataSource )
+{
+	mFrag = dataSource;
+	return *this;
+}
+
+vk::GlslProg::Format &GlslProg::Format::geometry( const DataSourceRef &dataSource )
+{
+	mGeom = dataSource;
+	return *this;
+}
+
+vk::GlslProg::Format &GlslProg::Format::tessellationCtrl( const DataSourceRef &dataSource )
+{
+	mTesc = dataSource;
+	return *this;
+}
+
+vk::GlslProg::Format &GlslProg::Format::tessellationEval( const DataSourceRef &dataSource )
+{
+	mTese = dataSource;
+	return *this;
+}
+
+vk::GlslProgRef GlslProg::create( const vk::GlslProg::Format &format )
+{
+	return create( format.mVert, format.mFrag, format.mGeom, format.mTese, format.mTesc );
+}
 
 vk::GlslProgRef GlslProg::create(
 	const DataSourceRef &vertTextDataSource,
@@ -1414,12 +1846,25 @@ std::vector<char> GlslProg::compileShader(
 	glslang_shader_t *shader = glslang_shader_create( &input );
 
 	// Shift bindings
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_TEXTURE, CINDER_CONTEXT_BINDING_SHIFT_TEXTURE );
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UBO, CINDER_CONTEXT_BINDING_SHIFT_UBO );
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_IMAGE, CINDER_CONTEXT_BINDING_SHIFT_IMAGE );
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SAMPLER, CINDER_CONTEXT_BINDING_SHIFT_SAMPLER );
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SSBO, CINDER_CONTEXT_BINDING_SHIFT_SSBO );
-	glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UAV, CINDER_CONTEXT_BINDING_SHIFT_UAV );
+	switch ( stage ) {
+		default: break;
+		case VK_SHADER_STAGE_VERTEX_BIT: {
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_TEXTURE, CINDER_CONTEXT_VS_BINDING_SHIFT_TEXTURE );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UBO, CINDER_CONTEXT_VS_BINDING_SHIFT_UBO );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_IMAGE, CINDER_CONTEXT_VS_BINDING_SHIFT_IMAGE );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SAMPLER, CINDER_CONTEXT_VS_BINDING_SHIFT_SAMPLER );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SSBO, CINDER_CONTEXT_VS_BINDING_SHIFT_SSBO );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UAV, CINDER_CONTEXT_VS_BINDING_SHIFT_UAV );
+		}; break;
+		case VK_SHADER_STAGE_FRAGMENT_BIT: {
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_TEXTURE, CINDER_CONTEXT_PS_BINDING_SHIFT_TEXTURE );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UBO, CINDER_CONTEXT_PS_BINDING_SHIFT_UBO );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_IMAGE, CINDER_CONTEXT_PS_BINDING_SHIFT_IMAGE );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SAMPLER, CINDER_CONTEXT_PS_BINDING_SHIFT_SAMPLER );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_SSBO, CINDER_CONTEXT_PS_BINDING_SHIFT_SSBO );
+			glslang_shader_shift_binding( shader, GLSLANG_RESOURCE_TYPE_UAV, CINDER_CONTEXT_PS_BINDING_SHIFT_UAV );
+		}; break;
+	}
 
 	// Options
 	int shaderOptions = GLSLANG_SHADER_AUTO_MAP_BINDINGS | GLSLANG_SHADER_AUTO_MAP_LOCATIONS | GLSLANG_SHADER_VULKAN_RULES_RELAXED;
@@ -1624,11 +2069,32 @@ std::vector<char> HlslProg::compileShader(
 
 	const std::u16string kSpirvArg		  = toUtf16( "-spirv" );
 	const std::u16string kSpirvReflectArg = toUtf16( "-fspv-reflect" );
-	const std::u16string kShiftTArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_TEXTURE ) );
-	const std::u16string kShiftBArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_UBO ) );
-	const std::u16string kShiftSArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_TEXTURE ) );
-	const std::u16string kShiftUArg		  = toUtf16( std::to_string( CINDER_CONTEXT_BINDING_SHIFT_UAV ) );
 	const std::u16string kSourceName	  = toUtf16( "DxcCompileHLSL" );
+
+	const std::u16string kVsShiftTArg = toUtf16( std::to_string( CINDER_CONTEXT_VS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kVsShiftBArg = toUtf16( std::to_string( CINDER_CONTEXT_VS_BINDING_SHIFT_UBO ) );
+	const std::u16string kVsShiftSArg = toUtf16( std::to_string( CINDER_CONTEXT_VS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kVsShiftUArg = toUtf16( std::to_string( CINDER_CONTEXT_VS_BINDING_SHIFT_UAV ) );
+
+	const std::u16string kPsShiftTArg = toUtf16( std::to_string( CINDER_CONTEXT_PS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kPsShiftBArg = toUtf16( std::to_string( CINDER_CONTEXT_PS_BINDING_SHIFT_UBO ) );
+	const std::u16string kPsShiftSArg = toUtf16( std::to_string( CINDER_CONTEXT_PS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kPsShiftUArg = toUtf16( std::to_string( CINDER_CONTEXT_PS_BINDING_SHIFT_UAV ) );
+
+	const std::u16string kHsShiftTArg = toUtf16( std::to_string( CINDER_CONTEXT_HS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kHsShiftBArg = toUtf16( std::to_string( CINDER_CONTEXT_HS_BINDING_SHIFT_UBO ) );
+	const std::u16string kHsShiftSArg = toUtf16( std::to_string( CINDER_CONTEXT_HS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kHsShiftUArg = toUtf16( std::to_string( CINDER_CONTEXT_HS_BINDING_SHIFT_UAV ) );
+
+	const std::u16string kDsShiftTArg = toUtf16( std::to_string( CINDER_CONTEXT_DS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kDsShiftBArg = toUtf16( std::to_string( CINDER_CONTEXT_DS_BINDING_SHIFT_UBO ) );
+	const std::u16string kDsShiftSArg = toUtf16( std::to_string( CINDER_CONTEXT_DS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kDsShiftUArg = toUtf16( std::to_string( CINDER_CONTEXT_DS_BINDING_SHIFT_UAV ) );
+
+	const std::u16string kGsShiftTArg = toUtf16( std::to_string( CINDER_CONTEXT_GS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kGsShiftBArg = toUtf16( std::to_string( CINDER_CONTEXT_GS_BINDING_SHIFT_UBO ) );
+	const std::u16string kGsShiftSArg = toUtf16( std::to_string( CINDER_CONTEXT_GS_BINDING_SHIFT_TEXTURE ) );
+	const std::u16string kGsShiftUArg = toUtf16( std::to_string( CINDER_CONTEXT_GS_BINDING_SHIFT_UAV ) );
 
 	std::string profileUtf8;
 	std::string defaultEntryPoint;
@@ -1685,12 +2151,69 @@ std::vector<char> HlslProg::compileShader(
 		(LPCWSTR)kSpirvArg.c_str(),
 		(LPCWSTR)kSpirvReflectArg.c_str(),
 		L"-fvk-auto-shift-bindings",
-		L"-fvk-t-shift", (LPCWSTR)kShiftTArg.c_str(), L"0",
-		L"-fvk-b-shift", (LPCWSTR)kShiftBArg.c_str(), L"0",
-		L"-fvk-s-shift", (LPCWSTR)kShiftSArg.c_str(), L"0",
-		L"-fvk-u-shift", (LPCWSTR)kShiftUArg.c_str(), L"0",
+		//L"-fvk-t-shift", (LPCWSTR)kShiftTArg.c_str(), L"0",
+		//L"-fvk-b-shift", (LPCWSTR)kShiftBArg.c_str(), L"0",
+		//L"-fvk-s-shift", (LPCWSTR)kShiftSArg.c_str(), L"0",
+		//L"-fvk-u-shift", (LPCWSTR)kShiftUArg.c_str(), L"0",
 	};
 	// clang-format on
+
+	std::vector<LPCWSTR> shiftArgs;
+	switch ( shaderStage ) {
+		default:
+		case VK_SHADER_STAGE_VERTEX_BIT: {
+			// clang-format off
+			shiftArgs = {
+				L"-fvk-t-shift", (LPCWSTR)kVsShiftTArg.c_str(), L"0",
+				L"-fvk-b-shift", (LPCWSTR)kVsShiftBArg.c_str(), L"0",
+				L"-fvk-s-shift", (LPCWSTR)kVsShiftSArg.c_str(), L"0",
+				L"-fvk-u-shift", (LPCWSTR)kVsShiftUArg.c_str(), L"0",
+			};
+			// clang-format on
+		} break;
+		case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT: {
+			// clang-format off
+			shiftArgs = {
+				L"-fvk-t-shift", (LPCWSTR)kHsShiftTArg.c_str(), L"0",
+				L"-fvk-b-shift", (LPCWSTR)kHsShiftBArg.c_str(), L"0",
+				L"-fvk-s-shift", (LPCWSTR)kHsShiftSArg.c_str(), L"0",
+				L"-fvk-u-shift", (LPCWSTR)kHsShiftUArg.c_str(), L"0",
+			};
+			// clang-format on
+		} break;
+		case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT: {
+			// clang-format off
+			shiftArgs = {
+				L"-fvk-t-shift", (LPCWSTR)kDsShiftTArg.c_str(), L"0",
+				L"-fvk-b-shift", (LPCWSTR)kDsShiftBArg.c_str(), L"0",
+				L"-fvk-s-shift", (LPCWSTR)kDsShiftSArg.c_str(), L"0",
+				L"-fvk-u-shift", (LPCWSTR)kDsShiftUArg.c_str(), L"0",
+			};
+			// clang-format on
+		} break;
+		case VK_SHADER_STAGE_GEOMETRY_BIT: {
+			// clang-format off
+			shiftArgs = {
+				L"-fvk-t-shift", (LPCWSTR)kGsShiftTArg.c_str(), L"0",
+				L"-fvk-b-shift", (LPCWSTR)kGsShiftBArg.c_str(), L"0",
+				L"-fvk-s-shift", (LPCWSTR)kGsShiftSArg.c_str(), L"0",
+				L"-fvk-u-shift", (LPCWSTR)kGsShiftUArg.c_str(), L"0",
+			};
+			// clang-format on
+		} break;
+		case VK_SHADER_STAGE_FRAGMENT_BIT: {
+			// clang-format off
+			shiftArgs = {
+				L"-fvk-t-shift", (LPCWSTR)kPsShiftTArg.c_str(), L"0",
+				L"-fvk-b-shift", (LPCWSTR)kPsShiftBArg.c_str(), L"0",
+				L"-fvk-s-shift", (LPCWSTR)kPsShiftSArg.c_str(), L"0",
+				L"-fvk-u-shift", (LPCWSTR)kPsShiftUArg.c_str(), L"0",
+			};
+			// clang-format on
+		} break;
+	}
+
+	std::copy( shiftArgs.begin(), shiftArgs.end(), std::back_inserter( arguments ) );
 
 	std::vector<std::pair<std::u16string, std::u16string>> defineNameValues;
 	// for ( XgiU32 i = 0; i < numDefines; ++i ) {

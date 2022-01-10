@@ -52,6 +52,14 @@ void UniformBuffer::initFrames( uint32_t size )
 	}
 }
 
+void UniformBuffer::flightSync( uint32_t currentFrameIndex, uint32_t previousFrameIndex )
+{
+	auto &prev = mFrames[previousFrameIndex].buffer;
+	auto &cur  = mFrames[currentFrameIndex].buffer;
+
+	memcpy(cur->getBaseAddress(), prev->getBaseAddress(), cur->getSize());
+}
+
 vk::UniformBuffer::Frame *UniformBuffer::getCurrentFrame()
 {
 	uint32_t index = ( mContentMode == vk::ContentMode::DYNAMIC ) ? getContext()->getFrameIndex() : 0;

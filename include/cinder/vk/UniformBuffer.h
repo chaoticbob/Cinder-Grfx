@@ -69,6 +69,8 @@ private:
 
 	void initFrames( uint32_t size );
 
+	virtual void flightSync(uint32_t currentFrameIndex, uint32_t previousFrameIndex) override;
+
 	struct Frame;
 	vk::UniformBuffer::Frame		 *getCurrentFrame();
 	const vk::UniformBuffer::Frame *getCurrentFrame() const;

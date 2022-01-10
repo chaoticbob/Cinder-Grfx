@@ -268,15 +268,25 @@ void BufferedMesh::Layout::allocate( vk::DeviceRef device, size_t numVertices, g
 			( *resultVertexBuffer )->ensureMinimumSize( totalDataBytes );
 		}
 		else { // else allocate
-			vk::Buffer::Usage usage = vk::Buffer::Usage().vertexBuffer().transferSrc().transferDst();
+			vk::Buffer::Usage	usage	= vk::Buffer::Usage().vertexBuffer().transferSrc().transferDst();
 			vk::Buffer::Options options = vk::Buffer::Options();
-			*resultVertexBuffer		= vk::Buffer::create( totalDataBytes, usage, vk::MemoryUsage::GPU_ONLY, options, device );
+			*resultVertexBuffer			= vk::Buffer::create( totalDataBytes, usage, vk::MemoryUsage::GPU_ONLY, options, device );
 		}
 	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // BufferedMesh
+
+vk::BufferedMeshRef BufferedMesh::create( const geom::Source &source, vk::DeviceRef device )
+{
+	if ( !device ) {
+		device = app::RendererVk::getCurrentRenderer()->getDevice();
+	}
+
+	// Pass an empty std::vector<pair<Layout,BufferRef>> to imply we want to pull data from the Source
+	return vk::BufferedMeshRef( new vk::BufferedMesh( device, source, std::vector<std::pair<vk::BufferedMesh::Layout, vk::BufferRef>>(), nullptr ) );
+}
 
 vk::BufferedMeshRef BufferedMesh::create( const geom::Source &source, const std::vector<vk::BufferedMesh::Layout> &layouts, vk::DeviceRef device )
 {

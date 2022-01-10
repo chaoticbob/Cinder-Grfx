@@ -131,6 +131,7 @@ list(APPEND VK_SRC_FILES
     ${SRC_PATH}/cinder/vk/Environment.cpp
     ${SRC_PATH}/cinder/vk/Descriptor.cpp
     ${SRC_PATH}/cinder/vk/Device.cpp
+    ${SRC_PATH}/cinder/vk/draw.cpp
     ${SRC_PATH}/cinder/vk/ChildObject.cpp
     ${SRC_PATH}/cinder/vk/DeviceDispatchTable.cpp
     ${SRC_PATH}/cinder/vk/Image.cpp

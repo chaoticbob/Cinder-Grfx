@@ -50,6 +50,17 @@ struct CI_API ScopedMatrices : private Noncopyable
 	~ScopedMatrices() { vk::popMatrices(); }
 };
 
+struct CI_API ScopedGlslProg : private Noncopyable
+{
+	ScopedGlslProg( vk::GlslProgRef &prog );
+	ScopedGlslProg( const std::shared_ptr<const vk::GlslProg> &prog );
+	ScopedGlslProg( const vk::GlslProg *prog );
+	~ScopedGlslProg();
+
+private:
+	Context *mCtx;
+};
+
 struct CI_API ScopedTextureBind : private Noncopyable
 {
 	ScopedTextureBind( const vk::TextureBaseRef &texture );

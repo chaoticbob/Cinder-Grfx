@@ -41,7 +41,12 @@ public:
 	uint32_t getCurrentFrameIndex() const;
 
 private:
+	virtual void flightSync(uint32_t currentFrameIndex, uint32_t previousFrameIndex) = 0;
+
+private:
 	vk::ContextRef mContext;
+
+	friend class vk::Context;
 };
 
 } // namespace cinder::vk

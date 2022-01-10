@@ -111,4 +111,11 @@ CI_API inline void translate( const ci::vec2 &v ) { translate( vec3( v, 0 ) ); }
 //! Translates the Model matrix by (\a x,\a y)
 CI_API inline void translate( float x, float y ) { translate( vec3( x, y, 0 ) ); }
 
+CI_API void color( float r, float g, float b );
+CI_API void color( float r, float g, float b, float a );
+CI_API void color( const ci::Color &c );
+CI_API void color( const ci::ColorA &c );
+CI_API void color( const ci::Color8u &c );
+CI_API void color( const ci::ColorA8u &c );
+
 } // namespace cinder::vk

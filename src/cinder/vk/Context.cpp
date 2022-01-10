@@ -194,6 +194,7 @@ Context::Context( vk::DeviceRef device, uint32_t width, uint32_t height, const O
 	mModelMatrixStack.push_back( mat4() );
 	mViewMatrixStack.push_back( mat4() );
 	mProjectionMatrixStack.push_back( mat4() );
+	mGlslProgStack.push_back( nullptr );
 }
 
 Context::~Context()
@@ -204,13 +205,30 @@ void Context::initializeDescriptorSetLayouts()
 {
 	vk::DescriptorSetLayout::Options options = vk::DescriptorSetLayout::Options();
 
-	uint32_t bindingNumber = 0;
-	for ( size_t i = 0; i < CINDER_CONTEXT_MAX_TEXTURE_COUNT; ++i, ++bindingNumber ) {
-		options.addCombinedImageSampler( bindingNumber );
+	for ( uint32_t i = 0; i < CINDER_CONTEXT_PER_STAGE_TEXTURE_COUNT; ++i ) {
+		uint32_t vs = CINDER_CONTEXT_VS_BINDING_SHIFT_TEXTURE + i;
+		uint32_t ps = CINDER_CONTEXT_PS_BINDING_SHIFT_TEXTURE + i;
+		uint32_t hs = CINDER_CONTEXT_HS_BINDING_SHIFT_TEXTURE + i;
+		uint32_t ds = CINDER_CONTEXT_DS_BINDING_SHIFT_TEXTURE + i;
+		uint32_t gs = CINDER_CONTEXT_GS_BINDING_SHIFT_TEXTURE + i;
+		options.addCombinedImageSampler( vs );
+		options.addCombinedImageSampler( ps );
+		options.addCombinedImageSampler( hs );
+		options.addCombinedImageSampler( ds );
+		options.addCombinedImageSampler( gs );
 	}
 
-	for ( size_t i = 0; i < CINDER_CONTEXT_MAX_UBO_COUNT; ++i, ++bindingNumber ) {
-		options.addUniformBuffer( bindingNumber );
+	for ( uint32_t i = 0; i < CINDER_CONTEXT_PER_STAGE_UBO_COUNT; ++i ) {
+		uint32_t vs = CINDER_CONTEXT_VS_BINDING_SHIFT_UBO + i;
+		uint32_t ps = CINDER_CONTEXT_PS_BINDING_SHIFT_UBO + i;
+		uint32_t hs = CINDER_CONTEXT_HS_BINDING_SHIFT_UBO + i;
+		uint32_t ds = CINDER_CONTEXT_DS_BINDING_SHIFT_UBO + i;
+		uint32_t gs = CINDER_CONTEXT_GS_BINDING_SHIFT_UBO + i;
+		options.addUniformBuffer( vs );
+		options.addUniformBuffer( ps );
+		options.addUniformBuffer( hs );
+		options.addUniformBuffer( ds );
+		options.addUniformBuffer( gs );
 	}
 
 	mDefaultSetLayout = vk::DescriptorSetLayout::create( options, getDevice() );
@@ -228,8 +246,8 @@ void Context::initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame 
 	frame.commandBuffer = commandBuffer;
 
 	vk::DescriptorPool::Options options = vk::DescriptorPool::Options()
-											  .addCombinedImageSampler( 10 * CINDER_CONTEXT_MAX_TEXTURE_COUNT )
-											  .addUniformBuffer( 10 * CINDER_CONTEXT_MAX_UBO_COUNT );
+											  .addCombinedImageSampler( 10 * CINDER_CONTEXT_PER_STAGE_TEXTURE_COUNT )
+											  .addUniformBuffer( 10 * CINDER_CONTEXT_PER_STAGE_UBO_COUNT );
 	frame.descriptorPool = vk::DescriptorPool::create( options, getDevice() );
 
 	uint32_t renderTargetCount = countU32( mRenderTargetFormats );
@@ -250,6 +268,18 @@ void Context::initializeFrame( vk::CommandBufferRef commandBuffer, Frame &frame 
 
 		frame.dsv = vk::ImageView::create( frame.depthStencil, getDevice() );
 	}
+}
+
+void Context::registerChild( vk::ContextChildObject *child )
+{
+	auto it = std::find( mChildren.begin(), mChildren.end(), child );
+	if ( it == mChildren.end() ) {
+		mChildren.push_back( child );
+	}
+}
+
+void Context::unregisterChild( vk::ContextChildObject *child )
+{
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -365,6 +395,12 @@ void Context::makeCurrent( const std::vector<SemaphoreInfo> &externalWaits )
 		vk::CommandBuffer::RenderingInfo ri = vk::CommandBuffer::RenderingInfo( frame.rtvs, frame.dsv );
 		frame.commandBuffer->beginRendering( ri );
 	}
+
+	if ( mFrameCount > 0 ) {
+		for ( auto &child : mChildren ) {
+			child->flightSync( mFrameIndex, mPreviousFrameIndex );
+		}
+	}
 }
 
 Context *Context::getCurrentContext()
@@ -438,32 +474,102 @@ std::pair<ivec2, ivec2> Context::getViewport()
 	return mViewportStack.back();
 }
 
-void Context::bindShaderProg( vk::ShaderProgRef prog )
+//////////////////////////////////////////////////////////////////
+// Shader
+
+void Context::bindShaderProg( const vk::ShaderProg *prog )
 {
-	mShaderProgram = prog;
+	mShaderProg = prog;
 
-	mGraphicsState.vert = mShaderProgram->getVertexShader();
-	mGraphicsState.frag = mShaderProgram->getFragmentShader();
-	mGraphicsState.geom = mShaderProgram->getGeometryShader();
-	mGraphicsState.tese = mShaderProgram->getTessellationEvalShader();
-	mGraphicsState.tesc = mShaderProgram->getTessellationCtrlShader();
+	mGraphicsState.vert = ( mShaderProg != nullptr ) ? mShaderProg->getVertexShader() : nullptr;
+	mGraphicsState.frag = ( mShaderProg != nullptr ) ? mShaderProg->getFragmentShader() : nullptr;
+	mGraphicsState.geom = ( mShaderProg != nullptr ) ? mShaderProg->getGeometryShader() : nullptr;
+	mGraphicsState.tese = ( mShaderProg != nullptr ) ? mShaderProg->getTessellationEvalShader() : nullptr;
+	mGraphicsState.tesc = ( mShaderProg != nullptr ) ? mShaderProg->getTessellationCtrlShader() : nullptr;
 
-	auto block = mShaderProgram->getDefaultUniformBlock();
-	if ( block ) {
-		mDescriptorState.bindUniformBuffer( block->getBinding(), mShaderProgram->getDefaultUniformBuffer()->getBindableBuffer() );
+	// auto block = mShaderProgram->getDefaultUniformBlock();
+	// if ( block ) {
+	//	mDescriptorState.bindUniformBuffer( block->getBinding(), mShaderProgram->getDefaultUniformBuffer()->getBindableBuffer() );
+	// }
+
+	if ( mShaderProg != nullptr ) {
+		auto &buffers = mShaderProg->getDefaultUniformBuffers();
+		for ( auto &buffer : buffers ) {
+			auto block = buffer->getUniformBlock();
+			mDescriptorState.bindUniformBuffer( block->getBinding(), buffer->getBindableBuffer() );
+		}
 	}
 }
 
+void Context::bindGlslProg( const vk::GlslProg *prog )
+{
+	if ( mGlslProgStack.empty() || ( mGlslProgStack.back() != prog ) ) {
+		if ( !mGlslProgStack.empty() ) {
+			mGlslProgStack.back() = prog;
+		}
+		bindShaderProg( prog );
+	}
+}
+
+void Context::pushGlslProg( const vk::GlslProg *prog )
+{
+	const GlslProg *prevGlsl = getGlslProg();
+
+	mGlslProgStack.push_back( prog );
+	if ( prog != prevGlsl ) {
+		bindShaderProg( prog );
+	}
+}
+
+void Context::pushGlslProg()
+{
+	mGlslProgStack.push_back( getGlslProg() );
+}
+
+void Context::popGlslProg( bool forceRestore )
+{
+	const GlslProg *prevGlsl = getGlslProg();
+
+	if ( !mGlslProgStack.empty() ) {
+		mGlslProgStack.pop_back();
+		if ( !mGlslProgStack.empty() ) {
+			if ( forceRestore || ( prevGlsl != mGlslProgStack.back() ) ) {
+				bindShaderProg( mGlslProgStack.back() );
+			}
+		}
+		else {
+			CI_LOG_E( "Empty GlslProg stack" );
+		}
+	}
+	else {
+		CI_LOG_E( "GlslProg stack underflow" );
+	}
+}
+
+const GlslProg *Context::getGlslProg()
+{
+	if ( mGlslProgStack.empty() ) {
+		mGlslProgStack.push_back( nullptr );
+	}
+
+	return mGlslProgStack.back();
+}
+
+//////////////////////////////////////////////////////////////////
+// Texture
+
 void Context::bindTexture( const vk::TextureBase *texture, uint32_t binding )
 {
-	binding += CINDER_CONTEXT_BINDING_SHIFT_TEXTURE;
-	mDescriptorState.bindCombinedImageSampler( binding, texture->getSampledImageView(), texture->getSampler() );
+	// binding += CINDER_CONTEXT_BINDING_SHIFT_TEXTURE;
+	mDescriptorState.bindCombinedImageSampler( binding + CINDER_CONTEXT_VS_BINDING_SHIFT_TEXTURE, texture->getSampledImageView(), texture->getSampler() );
+	mDescriptorState.bindCombinedImageSampler( binding + CINDER_CONTEXT_PS_BINDING_SHIFT_TEXTURE, texture->getSampledImageView(), texture->getSampler() );
 }
 
 void Context::unbindTexture( uint32_t binding )
 {
-	binding += CINDER_CONTEXT_BINDING_SHIFT_TEXTURE;
-	mDescriptorState.bindCombinedImageSampler( binding, nullptr, nullptr );
+	// binding += CINDER_CONTEXT_BINDING_SHIFT_TEXTURE;
+	mDescriptorState.bindCombinedImageSampler( binding + CINDER_CONTEXT_VS_BINDING_SHIFT_TEXTURE, nullptr, nullptr );
+	mDescriptorState.bindCombinedImageSampler( binding + CINDER_CONTEXT_PS_BINDING_SHIFT_TEXTURE, nullptr, nullptr );
 }
 
 void Context::initTextureBindingStack( uint32_t binding )
@@ -651,84 +757,86 @@ uint32_t Context::getActiveTexture()
 
 void Context::setDefaultShaderVars()
 {
-	if ( !mShaderProgram ) {
+	if ( !mShaderProg ) {
 		return;
 	}
 
-	auto pBuffer = mShaderProgram->getDefaultUniformBuffer();
+	auto &buffers = mShaderProg->getDefaultUniformBuffers();
 
-	const auto &uniforms = mShaderProgram->getDefaultUniformBlock()->getUniforms();
-	for ( const auto &uniform : uniforms ) {
-		switch ( uniform.getUniformSemantic() ) {
-			default: break;
-			case UNIFORM_MODEL_MATRIX: {
-				auto model = vk::getModelMatrix();
-				pBuffer->uniform( uniform.getName(), model );
-			} break;
-			case UNIFORM_MODEL_MATRIX_INVERSE: {
-				auto inverseModel = glm::inverse( vk::getModelMatrix() );
-				pBuffer->uniform( uniform.getName(), inverseModel );
-			} break;
-			case UNIFORM_MODEL_MATRIX_INVERSE_TRANSPOSE: {
-				auto modelInverseTranspose = vk::calcModelMatrixInverseTranspose();
-				pBuffer->uniform( uniform.getName(), modelInverseTranspose );
-			} break;
-			case UNIFORM_VIEW_MATRIX: {
-				auto view = vk::getViewMatrix();
-				pBuffer->uniform( uniform.getName(), view );
-			} break;
-			case UNIFORM_VIEW_MATRIX_INVERSE: {
-				auto viewInverse = vk::calcViewMatrixInverse();
-				pBuffer->uniform( uniform.getName(), viewInverse );
-			} break;
-			case UNIFORM_MODEL_VIEW: {
-				auto modelView = vk::getModelView();
-				pBuffer->uniform( uniform.getName(), modelView );
-			} break;
-			case UNIFORM_MODEL_VIEW_INVERSE: {
-				auto modelViewInverse = glm::inverse( vk::getModelView() );
-				pBuffer->uniform( uniform.getName(), modelViewInverse );
-			} break;
-			case UNIFORM_MODEL_VIEW_INVERSE_TRANSPOSE: {
-				auto normalMatrix = vk::calcNormalMatrix();
-				pBuffer->uniform( uniform.getName(), normalMatrix );
-			} break;
-			case UNIFORM_MODEL_VIEW_PROJECTION: {
-				auto modelViewProjection = vk::getModelViewProjection();
-				pBuffer->uniform( uniform.getName(), modelViewProjection );
-			} break;
-			case UNIFORM_MODEL_VIEW_PROJECTION_INVERSE: {
-				auto modelViewProjectionInverse = glm::inverse( vk::getModelViewProjection() );
-				pBuffer->uniform( uniform.getName(), modelViewProjectionInverse );
-			} break;
-			case UNIFORM_PROJECTION_MATRIX: {
-				auto projection = vk::getProjectionMatrix();
-				pBuffer->uniform( uniform.getName(), projection );
-			} break;
-			case UNIFORM_PROJECTION_MATRIX_INVERSE: {
-				auto projectionInverse = glm::inverse( vk::getProjectionMatrix() );
-				pBuffer->uniform( uniform.getName(), projectionInverse );
-			} break;
-			case UNIFORM_VIEW_PROJECTION: {
-				auto viewProjection = vk::getProjectionMatrix() * vk::getViewMatrix();
-				pBuffer->uniform( uniform.getName(), viewProjection );
-			} break;
-			case UNIFORM_NORMAL_MATRIX: {
-				auto normalMatrix = vk::calcNormalMatrix();
-				pBuffer->uniform( uniform.getName(), normalMatrix );
-			} break;
-			case UNIFORM_VIEWPORT_MATRIX: {
-				auto viewport = vk::calcViewportMatrix();
-				pBuffer->uniform( uniform.getName(), viewport );
-			} break;
-			case UNIFORM_WINDOW_SIZE: {
-				auto windowSize = app::getWindowSize();
-				pBuffer->uniform( uniform.getName(), windowSize );
-			} break;
-			case UNIFORM_ELAPSED_SECONDS: {
-				auto elapsed = float( app::getElapsedSeconds() );
-				pBuffer->uniform( uniform.getName(), elapsed );
-				break;
+	for ( auto &buffer : buffers ) {
+		const auto &uniforms = buffer->getUniformBlock()->getUniforms();
+		for ( const auto &uniform : uniforms ) {
+			switch ( uniform.getUniformSemantic() ) {
+				default: break;
+				case UNIFORM_MODEL_MATRIX: {
+					auto model = vk::getModelMatrix();
+					buffer->uniform( uniform.getName(), model );
+				} break;
+				case UNIFORM_MODEL_MATRIX_INVERSE: {
+					auto inverseModel = glm::inverse( vk::getModelMatrix() );
+					buffer->uniform( uniform.getName(), inverseModel );
+				} break;
+				case UNIFORM_MODEL_MATRIX_INVERSE_TRANSPOSE: {
+					auto modelInverseTranspose = vk::calcModelMatrixInverseTranspose();
+					buffer->uniform( uniform.getName(), modelInverseTranspose );
+				} break;
+				case UNIFORM_VIEW_MATRIX: {
+					auto view = vk::getViewMatrix();
+					buffer->uniform( uniform.getName(), view );
+				} break;
+				case UNIFORM_VIEW_MATRIX_INVERSE: {
+					auto viewInverse = vk::calcViewMatrixInverse();
+					buffer->uniform( uniform.getName(), viewInverse );
+				} break;
+				case UNIFORM_MODEL_VIEW: {
+					auto modelView = vk::getModelView();
+					buffer->uniform( uniform.getName(), modelView );
+				} break;
+				case UNIFORM_MODEL_VIEW_INVERSE: {
+					auto modelViewInverse = glm::inverse( vk::getModelView() );
+					buffer->uniform( uniform.getName(), modelViewInverse );
+				} break;
+				case UNIFORM_MODEL_VIEW_INVERSE_TRANSPOSE: {
+					auto normalMatrix = vk::calcNormalMatrix();
+					buffer->uniform( uniform.getName(), normalMatrix );
+				} break;
+				case UNIFORM_MODEL_VIEW_PROJECTION: {
+					auto modelViewProjection = vk::getModelViewProjection();
+					buffer->uniform( uniform.getName(), modelViewProjection );
+				} break;
+				case UNIFORM_MODEL_VIEW_PROJECTION_INVERSE: {
+					auto modelViewProjectionInverse = glm::inverse( vk::getModelViewProjection() );
+					buffer->uniform( uniform.getName(), modelViewProjectionInverse );
+				} break;
+				case UNIFORM_PROJECTION_MATRIX: {
+					auto projection = vk::getProjectionMatrix();
+					buffer->uniform( uniform.getName(), projection );
+				} break;
+				case UNIFORM_PROJECTION_MATRIX_INVERSE: {
+					auto projectionInverse = glm::inverse( vk::getProjectionMatrix() );
+					buffer->uniform( uniform.getName(), projectionInverse );
+				} break;
+				case UNIFORM_VIEW_PROJECTION: {
+					auto viewProjection = vk::getProjectionMatrix() * vk::getViewMatrix();
+					buffer->uniform( uniform.getName(), viewProjection );
+				} break;
+				case UNIFORM_NORMAL_MATRIX: {
+					auto normalMatrix = vk::calcNormalMatrix();
+					buffer->uniform( uniform.getName(), normalMatrix );
+				} break;
+				case UNIFORM_VIEWPORT_MATRIX: {
+					auto viewport = vk::calcViewportMatrix();
+					buffer->uniform( uniform.getName(), viewport );
+				} break;
+				case UNIFORM_WINDOW_SIZE: {
+					auto windowSize = app::getWindowSize();
+					buffer->uniform( uniform.getName(), windowSize );
+				} break;
+				case UNIFORM_ELAPSED_SECONDS: {
+					auto elapsed = float( app::getElapsedSeconds() );
+					buffer->uniform( uniform.getName(), elapsed );
+					break;
+				}
 			}
 		}
 	}
@@ -753,10 +861,10 @@ void Context::clearDepthStencilAttachment( VkImageAspectFlags aspectMask )
 
 void Context::bindDefaultDescriptorSet()
 {
-	std::array<VkDescriptorBufferInfo, CINDER_CONTEXT_MAX_UBO_COUNT>	uboBufferInfos;
-	std::array<VkDescriptorImageInfo, CINDER_CONTEXT_MAX_TEXTURE_COUNT> textureImageInfos;
-	uint32_t															uboCount	 = 0;
-	uint32_t															textureCount = 0;
+	std::array<VkDescriptorBufferInfo, CINDER_CONTEXT_STAGE_COUNT * CINDER_CONTEXT_PER_STAGE_UBO_COUNT>	   uboBufferInfos;
+	std::array<VkDescriptorImageInfo, CINDER_CONTEXT_STAGE_COUNT * CINDER_CONTEXT_PER_STAGE_TEXTURE_COUNT> textureImageInfos;
+	uint32_t																							   uboCount		= 0;
+	uint32_t																							   textureCount = 0;
 
 	std::vector<VkWriteDescriptorSet> writes;
 	for ( const auto &it : mDescriptorState.mDescriptors ) {
@@ -814,11 +922,11 @@ void Context::bindDefaultDescriptorSet()
 
 void Context::assignVertexAttributeLocations()
 {
-	if ( !mShaderProgram ) {
+	if ( !mShaderProg ) {
 		return;
 	}
 
-	auto &programVertexAttributes = mShaderProgram->getVertexAttributes();
+	auto &programVertexAttributes = mShaderProg->getVertexAttributes();
 
 	const uint32_t numBuffers		 = countU32( mVertexBuffers );
 	uint32_t	   vertexAttribCount = 0;

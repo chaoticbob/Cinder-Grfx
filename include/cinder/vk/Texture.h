@@ -141,9 +141,12 @@ public:
 		// clang-format off
 		Format& mipmap( uint32_t numLevels = CINDER_REMAINING_MIP_LEVELS ) { TextureBase::Format::mipmap(numLevels); return *this; }
 		Format& arrayLayers( uint32_t numLayers = CINDER_REMAINING_MIP_LEVELS ) { TextureBase::Format::arrayLayers(numLayers); return *this; }
+		//! Specifies whether the Texture should store scanlines top-down in memory. Default is \c false. Also marks Texture as top-down when \c true.
+		Format& loadTopDown( bool loadTopDown = true ) { mLoadTopDown = loadTopDown; return *this; }
 		// clang-format on
 
 	private:
+		bool							   mLoadTopDown;
 		std::function<void( Texture2d * )> mDeleter;
 
 		friend Texture2d;

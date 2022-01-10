@@ -42,10 +42,12 @@ VkDevice DeviceChildObject::getDeviceHandle() const
 ContextChildObject::ContextChildObject( vk::ContextRef context )
 	: mContext( context )
 {
+	mContext->registerChild( this );
 }
 
 ContextChildObject::~ContextChildObject()
 {
+	mContext->unregisterChild( this );
 }
 
 vk::ContextRef ContextChildObject::getContext() const

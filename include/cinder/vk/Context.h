@@ -104,14 +104,21 @@ public:
 
 	std::pair<ivec2, ivec2> getViewport();
 
-	void bindShaderProg( vk::ShaderProgRef prog );
+	void			bindShaderProg( const vk::ShaderProg *prog );
+	void			bindShaderProg( const vk::ShaderProgRef &prog ) { bindShaderProg( prog.get() ); }
+	void			bindGlslProg( const vk::GlslProg *prog );
+	void			bindGlslProg( const vk::GlslProgRef &prog ) { bindGlslProg( prog ); }
+	void			pushGlslProg( const vk::GlslProg *prog );
+	void			pushGlslProg( const vk::GlslProgRef &prog ) { pushGlslProg( prog.get() ); }
+	void			pushGlslProg();
+	void			popGlslProg( bool forceRestore = false );
+	const GlslProg *getGlslProg();
 
 	void				   bindTexture( const vk::TextureBase *texture, uint32_t binding );
 	void				   unbindTexture( uint32_t binding );
 	void				   pushTextureBinding( const vk::TextureBase *texture );
 	void				   pushTextureBinding( const vk::TextureBase *texture, uint32_t binding );
 	void				   popTextureBinding( uint32_t binding, bool forceRestore = false );
-	const vk::TextureBase *getTextureBinding();
 	const vk::TextureBase *getTextureBinding( uint32_t binding );
 
 	void	 setActiveTexture( uint32_t binding );
@@ -120,13 +127,17 @@ public:
 	void	 popActiveTexture( bool forceRestore = false );
 	uint32_t getActiveTexture();
 
-	void setDefaultShaderVars();
+	const ColorAf &getCurrentColor() const { return mColor; }
+	void		   setCurrentColor( const ColorAf &color ) { mColor = color; }
+	void		   setDefaultShaderVars();
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	vk::CommandBuffer *getCommandBuffer() const { return getCurrentFrame().commandBuffer.get(); }
 
+	uint64_t			 getFrameCount() const { return mFrameCount; }
 	uint32_t			 getFrameIndex() const { return mFrameIndex; }
+	uint32_t			 getPreviousFrameIndex() const { return mPreviousFrameIndex; }
 	uint32_t			 getNumFramesInFlight() const { return mNumFramesInFlight; }
 	uint32_t			 getNumRenderTargets() const { return countU32( mRenderTargetFormats ); }
 	const vk::ImageView *getRenderTargetView( uint32_t index ) const { return getCurrentFrame().rtvs[index].get(); }
@@ -141,6 +152,11 @@ public:
 	void bindGraphicsPipeline();
 	void draw( int32_t firstVertex, int32_t vertexCount );
 	void drawIndexed( int32_t firstIndex, int32_t indexCount );
+
+	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	
+	void registerChild(vk::ContextChildObject* child);
+	void unregisterChild(vk::ContextChildObject* child);
 
 private:
 	Context( vk::DeviceRef device, uint32_t width, uint32_t height, const Options &options );
@@ -265,6 +281,8 @@ private:
 		friend class Context;
 	};
 
+	std::vector<vk::ContextChildObject*> mChildren;
+
 	uint32_t			  mNumFramesInFlight   = 0;
 	uint32_t			  mWidth			   = 0;
 	uint32_t			  mHeight			   = 0;
@@ -284,16 +302,20 @@ private:
 	// This stores the descriptor binding number for textures starting from 0
 	std::vector<uint32_t>									 mActiveTextureStack;
 
-	ClearValues							 mClearValues = {};
-	DynamicStates						 mDynamicStates;
+	ClearValues	  mClearValues = {};
+	DynamicStates mDynamicStates;
+
 	std::vector<std::pair<ivec2, ivec2>> mViewportStack;
 	std::vector<std::pair<ivec2, ivec2>> mScissorStack;
-	std::vector<ci::mat4>				 mModelMatrixStack;
-	std::vector<ci::mat4>				 mViewMatrixStack;
-	std::vector<ci::mat4>				 mProjectionMatrixStack;
+
+	ci::ColorAf			  mColor;
+	std::vector<ci::mat4> mModelMatrixStack;
+	std::vector<ci::mat4> mViewMatrixStack;
+	std::vector<ci::mat4> mProjectionMatrixStack;
 
 	std::vector<std::pair<geom::BufferLayout, vk::BufferRef>> mVertexBuffers;
-	vk::ShaderProgRef										  mShaderProgram;
+	const vk::ShaderProg									 *mShaderProg;
+	std::vector<const vk::GlslProg *>						  mGlslProgStack;
 	vk::Pipeline::GraphicsPipelineCreateInfo				  mGraphicsState;
 	uint64_t												  mCurrentGraphicsPipelineHash;
 

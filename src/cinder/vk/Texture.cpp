@@ -673,7 +673,11 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 		case ImageIo::ChannelOrder::BGRX: {
 			switch ( dataType ) {
 				default: break;
-				case ImageIo::DataType::UINT8: imageFormat = VK_FORMAT_B8G8R8A8_UNORM; break;
+				case ImageIo::DataType::UINT8: {
+					//imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+					imageFormat		 = VK_FORMAT_R8G8B8A8_UNORM;
+					conversionTarget = CONVERSION_TARGET_RGBA_U8;
+				} break;
 				case ImageIo::DataType::UINT16: conversionTarget = CONVERSION_TARGET_RGBA_U16; break;
 				case ImageIo::DataType::FLOAT32: conversionTarget = CONVERSION_TARGET_RGBA_32F; break;
 				case ImageIo::DataType::FLOAT16: conversionTarget = CONVERSION_TARGET_RGBA_32F; break;
@@ -760,7 +764,8 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 						copyMipsToImage<uint8_t>( getDevice().get(), mip0, 0, mImage.get() );
 					}
 					else {
-						auto mip0 = Surface8u( imageSource );
+						SurfaceConstraints constraints = SurfaceConstraints();
+						auto mip0 = Surface8u( imageSource, constraints, true );
 						copyMipsToImage<uint8_t>( getDevice().get(), mip0, 0, mImage.get() );
 					}
 				} break;
