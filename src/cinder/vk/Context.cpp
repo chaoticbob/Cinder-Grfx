@@ -160,6 +160,10 @@ Context::Context( vk::DeviceRef device, uint32_t width, uint32_t height, const O
 
 		// CB
 		mGraphicsState.cb.attachmentCount = renderTargetCount;
+		for ( uint32_t i = 0; i < CINDER_MAX_RENDER_TARGETS; ++i ) {
+			mGraphicsState.cb.attachments[i].colorBlendOp = VK_BLEND_OP_ADD;
+			mGraphicsState.cb.attachments[i].alphaBlendOp = VK_BLEND_OP_ADD;
+		}
 
 		// OM
 		mGraphicsState.om.renderTargetCount = renderTargetCount;
@@ -469,9 +473,140 @@ void Context::waitForCompletion()
 	}
 }
 
+vk::StockShaderManager *Context::getStockShaderManager()
+{
+	if ( !mStockShaderManager ) {
+		mStockShaderManager = std::make_unique<vk::StockShaderManager>( shared_from_this() );
+	}
+	return mStockShaderManager.get();
+}
+
+//////////////////////////////////////////////////////////////////
+// Viewport
+void Context::viewport( const std::pair<ivec2, ivec2> &viewport )
+{
+	if ( setStackState( mViewportStack, viewport ) ) {
+		getCommandBuffer()->setViewport(
+			static_cast<float>( viewport.first.x ),
+			static_cast<float>( viewport.first.y ),
+			static_cast<float>( viewport.second.x ),
+			static_cast<float>( viewport.second.y ),
+			0.0f,
+			1.0f );
+	}
+}
+
+void Context::pushViewport( const std::pair<ivec2, ivec2> &viewport )
+{
+	if ( pushStackState( mViewportStack, viewport ) ) {
+		getCommandBuffer()->setViewport(
+			static_cast<float>( viewport.first.x ),
+			static_cast<float>( viewport.first.y ),
+			static_cast<float>( viewport.second.x ),
+			static_cast<float>( viewport.second.y ),
+			0.0f,
+			1.0f );
+	}
+}
+
+void Context::pushViewport()
+{
+	mViewportStack.push_back( getViewport() );
+}
+
+void Context::popViewport( bool forceRestore )
+{
+	if ( mViewportStack.empty() ) {
+		CI_LOG_E( "Viewport stack underflow" );
+	}
+	else if ( popStackState( mViewportStack ) || forceRestore ) {
+		auto viewport = getViewport();
+		getCommandBuffer()->setViewport(
+			static_cast<float>( viewport.first.x ),
+			static_cast<float>( viewport.first.y ),
+			static_cast<float>( viewport.second.x ),
+			static_cast<float>( viewport.second.y ),
+			0.0f,
+			1.0f );
+	}
+}
+
 std::pair<ivec2, ivec2> Context::getViewport()
 {
+	if ( mViewportStack.empty() ) {
+		// GLint params[4];
+		// glGetIntegerv( GL_VIEWPORT, params );
+		//// push twice in anticipation of later pop
+		// mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
+		// mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
+
+		// push twice in anticipation of later pop
+		mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( 0, 0 ), ivec2( mWidth, mHeight ) ) );
+		mViewportStack.push_back( std::pair<ivec2, ivec2>( ivec2( 0, 0 ), ivec2( mWidth, mHeight ) ) );
+	}
+
 	return mViewportStack.back();
+}
+
+//////////////////////////////////////////////////////////////////
+// Scissor Test
+void Context::setScissor( const std::pair<ivec2, ivec2> &scissor )
+{
+	if ( setStackState( mScissorStack, scissor ) ) {
+		getCommandBuffer()->setScissor(
+			scissor.first.x,
+			scissor.first.y,
+			static_cast<uint32_t>( scissor.second.x ),
+			static_cast<uint32_t>( scissor.second.y ) );
+	}
+}
+
+void Context::pushScissor( const std::pair<ivec2, ivec2> &scissor )
+{
+	if ( pushStackState( mScissorStack, scissor ) ) {
+		getCommandBuffer()->setScissor(
+			scissor.first.x,
+			scissor.first.y,
+			static_cast<uint32_t>( scissor.second.x ),
+			static_cast<uint32_t>( scissor.second.y ) );
+	}
+}
+
+void Context::pushScissor()
+{
+	mScissorStack.push_back( getScissor() );
+}
+
+void Context::popScissor( bool forceRestore )
+{
+	if ( mScissorStack.empty() ) {
+		CI_LOG_E( "Scissor stack underflow" );
+	}
+	else if ( popStackState( mScissorStack ) || forceRestore ) {
+		auto scissor = getScissor();
+		getCommandBuffer()->setScissor(
+			scissor.first.x,
+			scissor.first.y,
+			static_cast<uint32_t>( scissor.second.x ),
+			static_cast<uint32_t>( scissor.second.y ) );
+	}
+}
+
+std::pair<ivec2, ivec2> Context::getScissor()
+{
+	if ( mScissorStack.empty() ) {
+		// GLint params[4];
+		// glGetIntegerv( GL_SCISSOR_BOX, params );
+		//// push twice in anticipation of later pop
+		// mScissorStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
+		// mScissorStack.push_back( std::pair<ivec2, ivec2>( ivec2( params[0], params[1] ), ivec2( params[2], params[3] ) ) );
+
+		// push twice in anticipation of later pop
+		mScissorStack.push_back( std::pair<ivec2, ivec2>( ivec2( 0, 0 ), ivec2( mWidth, mHeight ) ) );
+		mScissorStack.push_back( std::pair<ivec2, ivec2>( ivec2( 0, 0 ), ivec2( mWidth, mHeight ) ) );
+	}
+
+	return mScissorStack.back();
 }
 
 //////////////////////////////////////////////////////////////////
@@ -752,6 +887,99 @@ uint32_t Context::getActiveTexture()
 	return mActiveTextureStack.back();
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////
+// BlendFunc
+
+void Context::enableBlend( bool enable, uint32_t attachmentIndex )
+{
+	mGraphicsState.cb.attachments[attachmentIndex].blendEnable = enable;
+}
+
+void Context::blendFunc( VkBlendFactor sfactor, VkBlendFactor dfactor, uint32_t attachmentIndex )
+{
+	blendFuncSeparate( sfactor, dfactor, sfactor, dfactor, attachmentIndex );
+}
+
+void Context::blendFuncSeparate( VkBlendFactor srcRGB, VkBlendFactor dstRGB, VkBlendFactor srcAlpha, VkBlendFactor dstAlpha, uint32_t attachmentIndex )
+{
+	bool needsChange = setStackState<VkBlendFactor>( mBlendSrcRgbStack[attachmentIndex], srcRGB );
+	needsChange		 = setStackState<VkBlendFactor>( mBlendDstRgbStack[attachmentIndex], dstRGB ) || needsChange;
+	needsChange		 = setStackState<VkBlendFactor>( mBlendSrcAlphaStack[attachmentIndex], srcAlpha ) || needsChange;
+	needsChange		 = setStackState<VkBlendFactor>( mBlendDstAlphaStack[attachmentIndex], dstAlpha ) || needsChange;
+	if ( needsChange ) {
+		mGraphicsState.cb.attachments[attachmentIndex].srcColorBlendFactor = srcRGB;
+		mGraphicsState.cb.attachments[attachmentIndex].dstColorBlendFactor = dstRGB;
+		mGraphicsState.cb.attachments[attachmentIndex].srcAlphaBlendFactor = srcAlpha;
+		mGraphicsState.cb.attachments[attachmentIndex].dstAlphaBlendFactor = dstAlpha;
+	}
+}
+
+void Context::pushBlendFuncSeparate( VkBlendFactor srcRGB, VkBlendFactor dstRGB, VkBlendFactor srcAlpha, VkBlendFactor dstAlpha, uint32_t attachmentIndex )
+{
+	bool needsChange = pushStackState<VkBlendFactor>( mBlendSrcRgbStack[attachmentIndex], srcRGB );
+	needsChange		 = pushStackState<VkBlendFactor>( mBlendDstRgbStack[attachmentIndex], dstRGB ) || needsChange;
+	needsChange		 = pushStackState<VkBlendFactor>( mBlendSrcAlphaStack[attachmentIndex], srcAlpha ) || needsChange;
+	needsChange		 = pushStackState<VkBlendFactor>( mBlendDstAlphaStack[attachmentIndex], dstAlpha ) || needsChange;
+	if ( needsChange ) {
+		mGraphicsState.cb.attachments[attachmentIndex].srcColorBlendFactor = srcRGB;
+		mGraphicsState.cb.attachments[attachmentIndex].dstColorBlendFactor = dstRGB;
+		mGraphicsState.cb.attachments[attachmentIndex].srcAlphaBlendFactor = srcAlpha;
+		mGraphicsState.cb.attachments[attachmentIndex].dstAlphaBlendFactor = dstAlpha;
+	}
+}
+
+void Context::pushBlendFuncSeparate( uint32_t attachmentIndex )
+{
+	VkBlendFactor resultSrcRGB, resultDstRGB, resultSrcAlpha, resultDstAlpha;
+	getBlendFuncSeparate( &resultSrcRGB, &resultDstRGB, &resultSrcAlpha, &resultDstAlpha );
+
+	mBlendSrcRgbStack[attachmentIndex].push_back( resultSrcRGB );
+	mBlendDstRgbStack[attachmentIndex].push_back( resultDstRGB );
+	mBlendSrcAlphaStack[attachmentIndex].push_back( resultSrcAlpha );
+	mBlendDstAlphaStack[attachmentIndex].push_back( resultDstAlpha );
+}
+
+void Context::popBlendFuncSeparate( bool forceRestore, uint32_t attachmentIndex )
+{
+	bool needsChange = popStackState<VkBlendFactor>( mBlendSrcRgbStack[attachmentIndex] );
+	needsChange		 = popStackState<VkBlendFactor>( mBlendDstRgbStack[attachmentIndex] ) || needsChange;
+	needsChange		 = popStackState<VkBlendFactor>( mBlendSrcAlphaStack[attachmentIndex] ) || needsChange;
+	needsChange		 = popStackState<VkBlendFactor>( mBlendDstAlphaStack[attachmentIndex] ) || needsChange;
+	needsChange		 = forceRestore || needsChange;
+	if ( needsChange && ( !mBlendSrcRgbStack[attachmentIndex].empty() ) && ( !mBlendSrcAlphaStack[attachmentIndex].empty() ) && ( !mBlendDstRgbStack[attachmentIndex].empty() ) && ( !mBlendDstAlphaStack[attachmentIndex].empty() ) ) {
+		mGraphicsState.cb.attachments[attachmentIndex].srcColorBlendFactor = mBlendSrcRgbStack[attachmentIndex].back();
+		mGraphicsState.cb.attachments[attachmentIndex].dstColorBlendFactor = mBlendDstRgbStack[attachmentIndex].back();
+		mGraphicsState.cb.attachments[attachmentIndex].srcAlphaBlendFactor = mBlendSrcAlphaStack[attachmentIndex].back();
+		mGraphicsState.cb.attachments[attachmentIndex].dstAlphaBlendFactor = mBlendDstAlphaStack[attachmentIndex].back();
+	}
+}
+
+void Context::getBlendFuncSeparate( VkBlendFactor *resultSrcRGB, VkBlendFactor *resultDstRGB, VkBlendFactor *resultSrcAlpha, VkBlendFactor *resultDstAlpha, uint32_t attachmentIndex )
+{
+	// push twice on empty to accommodate inevitable push later
+	if ( mBlendSrcRgbStack[attachmentIndex].empty() ) {
+		mBlendSrcRgbStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ONE );
+		mBlendSrcRgbStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ONE );
+	}
+	if ( mBlendDstRgbStack[attachmentIndex].empty() ) {
+		mBlendDstRgbStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ZERO );
+		mBlendDstRgbStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ZERO );
+	}
+	if ( mBlendSrcAlphaStack[attachmentIndex].empty() ) {
+		mBlendSrcAlphaStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ONE );
+		mBlendSrcAlphaStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ONE );
+	}
+	if ( mBlendDstAlphaStack[attachmentIndex].empty() ) {
+		mBlendDstAlphaStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ZERO );
+		mBlendDstAlphaStack[attachmentIndex].push_back( VK_BLEND_FACTOR_ZERO );
+	}
+
+	*resultSrcRGB	= mBlendSrcRgbStack[attachmentIndex].back();
+	*resultDstRGB	= mBlendDstRgbStack[attachmentIndex].back();
+	*resultSrcAlpha = mBlendSrcAlphaStack[attachmentIndex].back();
+	*resultDstAlpha = mBlendDstAlphaStack[attachmentIndex].back();
+}
+
 //////////////////////////////////////////////////////////////////
 // Default shader vars
 
@@ -984,8 +1212,15 @@ void Context::bindVertexBuffers( const vk::BufferedMeshRef &mesh )
 	getCommandBuffer()->bindVertexBuffers( 0, buffers );
 }
 
-void Context::bindGraphicsPipeline()
+void Context::bindGraphicsPipeline( const vk::PipelineLayout *pipelineLayout )
 {
+	if ( pipelineLayout != nullptr ) {
+		mGraphicsState.pipelineLayout = pipelineLayout;
+	}
+	else {
+		mGraphicsState.pipelineLayout = mDefaultPipelineLayout.get();
+	}
+
 	uint64_t hash = vk::Pipeline::calculateHash( &mGraphicsState );
 
 	auto it = mGraphicsPipelines.find( hash );

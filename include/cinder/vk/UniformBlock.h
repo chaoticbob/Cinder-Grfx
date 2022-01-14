@@ -71,11 +71,18 @@ class CI_API UniformBlock
 public:
 	UniformBlock() {}
 
+	// Uniform buffer block
 	UniformBlock(
 		const std::string		  &name,
 		uint32_t					size,
 		uint32_t					binding,
 		uint32_t					set,
+		const std::vector<Uniform> &uniforms );
+
+	// Push constants block
+	UniformBlock(
+		const std::string		  &name,
+		uint32_t					size,
 		const std::vector<Uniform> &uniforms );
 
 	const std::string &getName() const { return mName; }
@@ -91,6 +98,14 @@ public:
 	const Uniform *getUniform( const std::string &name ) const;
 
 private:
+	enum class BlockType
+	{
+		UNKNOWN,
+		UNIFORM_BUFFER_BLOCK,
+		PUSH_CONSTANTS_BLOCK,
+	};
+
+	BlockType			 mBlockType = BlockType::UNKNOWN;
 	std::string			 mName;
 	uint32_t			 mSize	  = 0;
 	uint32_t			 mBinding = UINT32_MAX;

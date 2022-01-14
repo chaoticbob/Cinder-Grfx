@@ -3,7 +3,7 @@
 namespace cinder::vk {
 
 Uniform::Uniform(
-	const std::string & name,
+	const std::string  &name,
 	vk::DataType		dataType,
 	vk::UniformSemantic uniformSemantic,
 	uint32_t			offset,
@@ -22,15 +22,27 @@ Uniform::Uniform(
 // UniformBlock
 
 UniformBlock::UniformBlock(
-	const std::string &			name,
+	const std::string		  &name,
 	uint32_t					size,
 	uint32_t					binding,
 	uint32_t					set,
 	const std::vector<Uniform> &uniforms )
-	: mName( name ),
+	: mBlockType( BlockType::UNIFORM_BUFFER_BLOCK ),
+	  mName( name ),
 	  mSize( size ),
 	  mBinding( binding ),
 	  mSet( set ),
+	  mUniforms( uniforms )
+{
+}
+
+UniformBlock::UniformBlock(
+	const std::string		  &name,
+	uint32_t					size,
+	const std::vector<Uniform> &uniforms )
+	: mBlockType( BlockType::PUSH_CONSTANTS_BLOCK ),
+	  mName( name ),
+	  mSize( size ),
 	  mUniforms( uniforms )
 {
 }

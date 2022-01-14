@@ -67,13 +67,27 @@ public:
 	void begin( VkCommandBufferUsageFlags usageFlags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT );
 	void end();
 
+	void pushConstants(
+		const vk::PipelineLayout *pipelineLayout,
+		VkShaderStageFlags		  stageFlags,
+		uint32_t				  offset,
+		uint32_t				  size,
+		const void			   *pValues );
+
+	void pushDescriptor(
+		VkPipelineBindPoint		  pipelineBindPoint,
+		const vk::PipelineLayout *pipelineLayout,
+		uint32_t				  binding,
+		uint32_t				  set,
+		const vk::TextureBase	  *pTexture );
+
 	void bindDescriptorSets(
 		VkPipelineBindPoint						 pipelineBindPoint,
-		const vk::PipelineLayoutRef &			 pipelineLayout,
+		const vk::PipelineLayoutRef				&pipelineLayout,
 		uint32_t								 firstSet,
 		const std::vector<vk::DescriptorSetRef> &sets,
 		uint32_t								 dynamicOffsetCount = 0,
-		const uint32_t *						 pDynamicOffsets	= nullptr );
+		const uint32_t						  *pDynamicOffsets	= nullptr );
 
 	void bindPipeline(
 		VkPipelineBindPoint	   pipelineBindPoint,

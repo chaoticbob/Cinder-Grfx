@@ -169,8 +169,8 @@ static void configureExtensions(
 		extensions.push_back( VK_EXT_DEPTH_RANGE_UNRESTRICTED_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME );
 		extensions.push_back( VK_EXT_EXTENDED_DYNAMIC_STATE_2_EXTENSION_NAME );
-		// extensions.push_back( VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME );
+		extensions.push_back( VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME ); // No participation in VkDeviceCreateInfo::pNext chain
 		extensions.push_back( VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME );
 	}
 
@@ -216,10 +216,15 @@ Device::Device( VkPhysicalDevice gpuHandle, const Options &options )
 {
 	// Device properties
 	{
+		VkPhysicalDevicePushDescriptorPropertiesKHR pushDescriptorProperties = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_PROPERTIES_KHR };
+
 		VkPhysicalDeviceProperties2 properties = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+		properties.pNext = &pushDescriptorProperties;
 
 		CI_VK_INSTANCE_FN( GetPhysicalDeviceProperties2( this->mGpuHandle, &properties ) );
 		memcpy( &mDeviceProperties, &properties.properties, sizeof( mDeviceProperties ) );
+
+		mExtensionDeviceProperties.maxPushDescriptors = pushDescriptorProperties.maxPushDescriptors; 
 	}
 
 	// Features
@@ -473,6 +478,11 @@ VkPhysicalDevice Device::getGpuHandle() const
 const VkPhysicalDeviceProperties &Device::getDeviceProperties() const
 {
 	return mDeviceProperties;
+}
+
+const Device::ExtensionPhysicalDeviceProperties &Device::getExtensionDeviceProperties() const
+{
+	return mExtensionDeviceProperties;
 }
 
 const VkPhysicalDeviceLimits &Device::getDeviceLimits() const

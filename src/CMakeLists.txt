@@ -111,6 +111,7 @@ list(APPEND VK_HDR_FILES
     ${INC_PATH}/cinder/vk/RenderPass.h
     ${INC_PATH}/cinder/vk/Sampler.h
     ${INC_PATH}/cinder/vk/ShaderProg.h
+    ${INC_PATH}/cinder/vk/StockShaders.h
     ${INC_PATH}/cinder/vk/Swapchain.h
     ${INC_PATH}/cinder/vk/Sync.h
     ${INC_PATH}/cinder/vk/Texture.h
@@ -142,6 +143,7 @@ list(APPEND VK_SRC_FILES
     ${SRC_PATH}/cinder/vk/RenderPass.cpp
     ${SRC_PATH}/cinder/vk/Sampler.cpp
     ${SRC_PATH}/cinder/vk/ShaderProg.cpp
+    ${SRC_PATH}/cinder/vk/StockShaders.cpp
     ${SRC_PATH}/cinder/vk/Swapchain.cpp
     ${SRC_PATH}/cinder/vk/Sync.cpp
     ${SRC_PATH}/cinder/vk/Texture.cpp

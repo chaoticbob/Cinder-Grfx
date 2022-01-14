@@ -14,6 +14,9 @@
 
 namespace cinder::vk {
 
+//! @class SubmitInfo
+//!
+//!
 class SubmitInfo
 {
 public:
@@ -36,11 +39,19 @@ private:
 	friend class Device;
 };
 
+//! @class Device
+//!
+//!
 class Device
 	: public std::enable_shared_from_this<Device>
 {
 private:
 public:
+	struct ExtensionPhysicalDeviceProperties
+	{
+		uint32_t maxPushDescriptors = 0;
+	};
+
 	class SamplerCache
 	{
 	public:
@@ -50,7 +61,7 @@ public:
 		vk::SamplerRef createSampler( const vk::SamplerHashKey &key );
 
 	private:
-		vk::Device *					   mDevice = nullptr;
+		vk::Device						*mDevice = nullptr;
 		std::map<uint64_t, vk::SamplerRef> mSamplerMap;
 	};
 
@@ -85,18 +96,19 @@ public:
 
 	const DeviceDispatchTable *vkfn() const { return &mVkFn; }
 
-	VkInstance						  getInstanceHandle() const;
-	VkPhysicalDevice				  getGpuHandle() const;
-	const VkPhysicalDeviceProperties &getDeviceProperties() const;
-	const VkPhysicalDeviceLimits &	  getDeviceLimits() const;
-	VkDevice						  getDeviceHandle() const;
-	const VkPhysicalDeviceFeatures &  getDeviceFeatures() const;
-	std::string						  getDeviceName() const;
-	const vk::QueueFamilyIndices &	  getQueueFamilyIndices() const;
-	VkQueue							  getGraphicsQueueHandle() const;
-	VkQueue							  getComputeQueueHandle() const;
-	VkQueue							  getTransferQueueHandle() const;
-	VmaAllocator					  getAllocatorHandle() const;
+	VkInstance								 getInstanceHandle() const;
+	VkPhysicalDevice						 getGpuHandle() const;
+	const VkPhysicalDeviceProperties		 &getDeviceProperties() const;
+	const ExtensionPhysicalDeviceProperties &getExtensionDeviceProperties() const;
+	const VkPhysicalDeviceLimits			 &getDeviceLimits() const;
+	VkDevice								 getDeviceHandle() const;
+	const VkPhysicalDeviceFeatures		   &getDeviceFeatures() const;
+	std::string								 getDeviceName() const;
+	const vk::QueueFamilyIndices			 &getQueueFamilyIndices() const;
+	VkQueue									 getGraphicsQueueHandle() const;
+	VkQueue									 getComputeQueueHandle() const;
+	VkQueue									 getTransferQueueHandle() const;
+	VmaAllocator							 getAllocatorHandle() const;
 
 	//! Returns max sample count for render targets
 	VkSampleCountFlagBits getMaxRenderTargetSampleCount() const;
@@ -160,7 +172,7 @@ public:
 		const void *pSrcData,
 		uint32_t	dstMipLevel,
 		uint32_t	dstArrayLayer,
-		vk::Image * pDstImage );
+		vk::Image  *pDstImage );
 
 	//! Use these if copy requires using mapped pointer from staging buffer as storage
 	void *beginCopyToImage(
@@ -207,26 +219,27 @@ private:
 		vk::Buffer *pSrcBuffer,
 		uint32_t	dstMipLevel,
 		uint32_t	dstArrayLayer,
-		vk::Image * pDstImage );
+		vk::Image  *pDstImage );
 
 private:
-	DeviceDispatchTable		   mVkFn				= {};
-	VkPhysicalDevice		   mGpuHandle			= VK_NULL_HANDLE;
-	VkPhysicalDeviceProperties mDeviceProperties	= {};
-	VkPhysicalDeviceFeatures   mDeviceFeatures		= {};
-	VkDevice				   mDeviceHandle		= VK_NULL_HANDLE;
-	vk::QueueFamilyIndices	   mQueueFamilyIndices	= {};
-	VkQueue					   mGraphicsQueueHandle = VK_NULL_HANDLE;
-	VkQueue					   mComputeQueueHandle	= VK_NULL_HANDLE;
-	VkQueue					   mTransferQueueHandle = VK_NULL_HANDLE;
-	VmaAllocator			   mVmaAllocatorHandle	= VK_NULL_HANDLE;
-	vk::Swapchain *			   mSwapchain			= nullptr;
-	std::mutex				   mGraphicsQueueMutex;
-	std::mutex				   mComputeQueueMutex;
-	std::mutex				   mTransferQueueMutex;
-	uint32_t				   mStagingBufferSize = CI_VK_DEFAULT_STAGING_BUFFER_SIZE;
-	vk::BufferRef			   mStagingBuffer;
-	vk::BufferRef			   mOversizedStagingBuffer;
+	DeviceDispatchTable				  mVkFn						 = {};
+	VkPhysicalDevice				  mGpuHandle				 = VK_NULL_HANDLE;
+	VkPhysicalDeviceProperties		  mDeviceProperties			 = {};
+	ExtensionPhysicalDeviceProperties mExtensionDeviceProperties = {};
+	VkPhysicalDeviceFeatures		  mDeviceFeatures			 = {};
+	VkDevice						  mDeviceHandle				 = VK_NULL_HANDLE;
+	vk::QueueFamilyIndices			  mQueueFamilyIndices		 = {};
+	VkQueue							  mGraphicsQueueHandle		 = VK_NULL_HANDLE;
+	VkQueue							  mComputeQueueHandle		 = VK_NULL_HANDLE;
+	VkQueue							  mTransferQueueHandle		 = VK_NULL_HANDLE;
+	VmaAllocator					  mVmaAllocatorHandle		 = VK_NULL_HANDLE;
+	vk::Swapchain					*mSwapchain				 = nullptr;
+	std::mutex						  mGraphicsQueueMutex;
+	std::mutex						  mComputeQueueMutex;
+	std::mutex						  mTransferQueueMutex;
+	uint32_t						  mStagingBufferSize = CI_VK_DEFAULT_STAGING_BUFFER_SIZE;
+	vk::BufferRef					  mStagingBuffer;
+	vk::BufferRef					  mOversizedStagingBuffer;
 
 	static const uint32_t NUM_TRANSIENT_OPERATIONS = 2;
 	VkCommandPool		  mTransientCommandPool	   = VK_NULL_HANDLE;

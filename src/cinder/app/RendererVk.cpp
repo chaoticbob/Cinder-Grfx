@@ -8,6 +8,7 @@
 #include "cinder/vk/Swapchain.h"
 #include "cinder/vk/Sync.h"
 #include "cinder/vk/Util.h"
+#include "cinder/vk/wrapper.h"
 
 #if defined( CINDER_MSW_DESKTOP )
 #include "cinder/app/msw/AppImplMsw.h"
@@ -122,6 +123,8 @@ void RendererVk::setupFrames( uint32_t windowWidth, uint32_t windowHeight )
 #if defined( CINDER_MSW_DESKTOP )
 void RendererVk::setup( WindowImplMsw *windowImpl, RendererRef sharedRenderer )
 {
+	mWindowImpl = windowImpl;
+
 	setupDevice( windowImpl->getTitle(), sharedRenderer );
 
 	// Setup swapchain for window
@@ -200,6 +203,17 @@ void RendererVk::finishDraw()
 
 void RendererVk::defaultResize()
 {
+#if defined(CINDER_MSW)
+	::RECT clientRect;
+	::GetClientRect( mWindowImpl->getHwnd(), &clientRect );
+	int widthPx = clientRect.right - clientRect.left;
+	int heightPx = clientRect.bottom - clientRect.top;
+
+	ivec2 sizePt = mWindowImpl->getSize();
+
+	vk::viewport( 0, 0, widthPx, heightPx );
+	vk::setMatricesWindow( sizePt.x, sizePt.y );
+#endif
 }
 
 void RendererVk::makeCurrentContext( bool force )

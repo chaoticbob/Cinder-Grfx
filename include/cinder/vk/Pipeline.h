@@ -213,17 +213,17 @@ public:
 	//
 	struct GraphicsPipelineCreateInfo
 	{
-		const vk::ShaderModule *vert;			// = nullptr;
-		const vk::ShaderModule *frag;			// = nullptr;
-		const vk::ShaderModule *geom;			// = nullptr;
-		const vk::ShaderModule *tese;			// = nullptr;
-		const vk::ShaderModule *tesc;			// = nullptr;
-		vk::PipelineLayout	   *pipelineLayout; // = nullptr;
-		InputAssemblyState		ia;				// = {};
-		RasterizerState			rs;				// = {};
-		DepthStencilState		ds;				// = {};
-		ColorBlendState			cb;				// = {};
-		OutputMergerState		om;				// = {};
+		const vk::ShaderModule   *vert;			  // = nullptr;
+		const vk::ShaderModule   *frag;			  // = nullptr;
+		const vk::ShaderModule   *geom;			  // = nullptr;
+		const vk::ShaderModule   *tese;			  // = nullptr;
+		const vk::ShaderModule   *tesc;			  // = nullptr;
+		const vk::PipelineLayout *pipelineLayout; // = nullptr;
+		InputAssemblyState		  ia;			  // = {};
+		RasterizerState			  rs;			  // = {};
+		DepthStencilState		  ds;			  // = {};
+		ColorBlendState			  cb;			  // = {};
+		OutputMergerState		  om;			  // = {};
 	};
 
 	// struct Options

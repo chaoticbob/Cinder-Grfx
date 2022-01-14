@@ -3,6 +3,7 @@
 #include "cinder/vk/ChildObject.h"
 #include "cinder/DataSource.h"
 #include "cinder/ImageIo.h"
+#include "cinder/Rect.h"
 #include "cinder/Surface.h"
 
 namespace cinder::vk {
@@ -82,18 +83,26 @@ public:
 		VkBorderColor		 mBorderColor			  = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
 		bool				 mUnnormalizedCoordinates = VK_FALSE;
 
-		friend class Texturebase;
+		friend class TextureBase;
 	};
 
 	virtual ~TextureBase();
 
-	uint32_t getWidth() const { return mExtent.width; }
-	uint32_t getHeight() const { return mExtent.height; }
-	uint32_t getDepth() const { return mExtent.depth; }
+	//! Returns the width of the texture in pixels, ignoring clean bounds.
+	virtual uint32_t getWidth() const  = 0;
+	//! Returns the height of the texture in pixels, ignoring clean bounds.
+	virtual uint32_t getHeight() const = 0;
+	//! Returns the depth of the texture in pixels, ignoring clean bounds.
+	virtual uint32_t getDepth() const  = 0;
+	//! Returns the 2D aspect ratio of the texture (width / height), ignoring clean bounds.
+	float			 getAspectRatio() const { return getWidth() / (float)getHeight(); }
+	//! Returns the Area defining the Texture's bounds in pixels, ignoring clean bounds.
+	Area			 getBounds() const { return Area( 0, 0, getWidth(), getHeight() ); }
 
 	VkFormat				  getImageFormat() const { return mImageFormat; }
 	VkImageType				  getImageType() const { return mImageType; }
 	const VkComponentMapping &getComponentMapping() const { return mComponentMapping; }
+	bool					  getUnnormalizedCoordinates() const { return mUnnormalizedCoordinates; }
 
 	const vk::Image		*getImage() const { return mImage.get(); }
 	const vk::Sampler	  *getSampler() const { return mSampler.get(); }
@@ -117,7 +126,8 @@ protected:
 	VkExtent3D		   mExtent		= {};
 	VkFormat		   mImageFormat = VK_FORMAT_UNDEFINED;
 	VkImageType		   mImageType;
-	VkComponentMapping mComponentMapping = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
+	bool			   mUnnormalizedCoordinates = false;
+	VkComponentMapping mComponentMapping		= { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY };
 	vk::ImageRef	   mImage;
 	vk::SamplerRef	   mSampler;
 	bool			   mDisposeSampler = false;
@@ -183,6 +193,21 @@ public:
 
 	virtual void bind( uint32_t binding = 0 ) override;
 
+	//! Returns the width of the texture in pixels.
+	uint32_t getWidth() const override { return mCleanBounds.getWidth(); }
+	//! Returns the height of the texture in pixels.
+	uint32_t getHeight() const override { return mCleanBounds.getHeight(); }
+	//! Returns the depth of the texture in pixels.
+	uint32_t getDepth() const override { return 1; }
+	//! Returns the true width of the texture in pixels, which may be larger than it's "clean" area
+	uint32_t getActualWidth() const { return mExtent.width; }
+	//! Returns the true height of the texture in pixels, which may be larger than it's "clean" area
+	uint32_t getActualHeight() const { return mExtent.height; }
+	//! Returns size of the texture in pixels, igonring clean bounds
+	ivec2	 getSize() const { return ivec2( getWidth(), getHeight() ); }
+	//! Returns the UV coordinates which correspond to the pixels contained in \a area (as expressed with an upper-left origin, relative to clean bounds). Accounts for top-down storage and target (0-1 for \c GL_TEXTURE_2D and pixels for \c GL_TEXTURE_RECTANGLE)
+	Rectf	 getAreaTexCoords( const Area &area ) const;
+
 protected:
 	Texture2d( vk::DeviceRef device, int width, int height, Format format = Format() );
 	Texture2d( vk::DeviceRef device, const void *data, VkFormat dataFormat, int width, int height, Format format = Format() );
@@ -197,8 +222,7 @@ protected:
 	virtual void initViews() override;
 
 private:
-	ivec2 mActualSize;	// true texture size in pixels, as opposed to clean bounds
-	Area  mCleanBounds; // relative to upper-left origin regardless of top-down
+	Area mCleanBounds; // relative to upper-left origin regardless of top-down
 };
 
 //! @class TextureCubeMap
@@ -228,6 +252,13 @@ public:
 	static vk::TextureCubeMapRef create( const ImageSourceRef &imageSource, const Format &format = Format(), vk::DeviceRef device = nullptr );
 
 	virtual void bind( uint32_t binding = 0 ) override;
+
+	//! Returns the width of the texture in pixels
+	uint32_t getWidth() const override { return mExtent.width; }
+	//! Returns the height of the texture in pixels
+	uint32_t getHeight() const override { return mExtent.height; }
+	//! Returns the depth of the texture in pixels (
+	uint32_t getDepth() const override { return 1; }
 
 private:
 	template <typename T>

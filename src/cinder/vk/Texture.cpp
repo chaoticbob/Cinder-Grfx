@@ -154,7 +154,8 @@ static uint32_t countMips( uint32_t width, uint32_t height, uint32_t depth )
 
 void TextureBase::initImage( VkImageCreateFlags createFlags, VkFormat imageFormat, const Format &format )
 {
-	mImageFormat = imageFormat;
+	mImageFormat			 = imageFormat;
+	mUnnormalizedCoordinates = format.mUnnormalizedCoordinates;
 
 	Image::Usage imageUsage = Image::Usage().transferSrc().transferDst().sampledImage();
 
@@ -348,14 +349,12 @@ Texture2dRef Texture2d::create( ImageSourceRef imageSource, const Format &format
 
 Texture2d::Texture2d( vk::DeviceRef device, int width, int height, Format format )
 	: TextureBase( device, width, height ),
-	  mActualSize( width, height ),
 	  mCleanBounds( 0, 0, width, height )
 {
 }
 
 Texture2d::Texture2d( vk::DeviceRef device, const void *data, VkFormat dataFormat, int width, int height, Format format )
 	: TextureBase( device, width, height ),
-	  mActualSize( width, height ),
 	  mCleanBounds( 0, 0, width, height )
 {
 	initImage( 0, dataFormat, format );
@@ -365,7 +364,6 @@ Texture2d::Texture2d( vk::DeviceRef device, const void *data, VkFormat dataForma
 
 Texture2d::Texture2d( vk::DeviceRef device, const Surface8u &surface, Format format )
 	: TextureBase( device, surface.getWidth(), surface.getHeight() ),
-	  mActualSize( surface.getSize() ),
 	  mCleanBounds( 0, 0, surface.getWidth(), surface.getHeight() )
 {
 	int		 channelOrder  = surface.getChannelOrder().getCode();
@@ -418,7 +416,6 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface8u &surface, Format for
 
 Texture2d::Texture2d( vk::DeviceRef device, const Surface16u &surface, Format format )
 	: TextureBase( device, surface.getWidth(), surface.getHeight() ),
-	  mActualSize( surface.getSize() ),
 	  mCleanBounds( 0, 0, surface.getWidth(), surface.getHeight() )
 {
 	int		 channelOrder  = surface.getChannelOrder().getCode();
@@ -471,7 +468,6 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface16u &surface, Format fo
 
 Texture2d::Texture2d( vk::DeviceRef device, const Surface32f &surface, Format format )
 	: TextureBase( device, surface.getWidth(), surface.getHeight() ),
-	  mActualSize( surface.getSize() ),
 	  mCleanBounds( 0, 0, surface.getWidth(), surface.getHeight() )
 {
 	int		 channelOrder  = surface.getChannelOrder().getCode();
@@ -524,7 +520,6 @@ Texture2d::Texture2d( vk::DeviceRef device, const Surface32f &surface, Format fo
 
 Texture2d::Texture2d( vk::DeviceRef device, const Channel8u &channel, Format format )
 	: TextureBase( device, channel.getWidth(), channel.getHeight() ),
-	  mActualSize( channel.getSize() ),
 	  mCleanBounds( 0, 0, channel.getWidth(), channel.getHeight() )
 {
 	initImage( 0, VK_FORMAT_R8_UNORM, format );
@@ -541,7 +536,6 @@ Texture2d::Texture2d( vk::DeviceRef device, const Channel8u &channel, Format for
 
 Texture2d::Texture2d( vk::DeviceRef device, const Channel16u &channel, Format format )
 	: TextureBase( device, channel.getWidth(), channel.getHeight() ),
-	  mActualSize( channel.getSize() ),
 	  mCleanBounds( 0, 0, channel.getWidth(), channel.getHeight() )
 {
 	initImage( 0, VK_FORMAT_R16_UNORM, format );
@@ -558,7 +552,6 @@ Texture2d::Texture2d( vk::DeviceRef device, const Channel16u &channel, Format fo
 
 Texture2d::Texture2d( vk::DeviceRef device, const Channel32f &channel, Format format )
 	: TextureBase( device, channel.getWidth(), channel.getHeight() ),
-	  mActualSize( channel.getSize() ),
 	  mCleanBounds( 0, 0, channel.getWidth(), channel.getHeight() )
 {
 	initImage( 0, VK_FORMAT_R32_SFLOAT, format );
@@ -636,7 +629,6 @@ static void copyMipsToImage(
 
 Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, Format format )
 	: TextureBase( device, imageSource->getWidth(), imageSource->getHeight() ),
-	  mActualSize( imageSource->getWidth(), imageSource->getHeight() ),
 	  mCleanBounds( 0, 0, imageSource->getWidth(), imageSource->getHeight() )
 {
 	enum ConversionTarget
@@ -674,7 +666,7 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 			switch ( dataType ) {
 				default: break;
 				case ImageIo::DataType::UINT8: {
-					//imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
+					// imageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 					imageFormat		 = VK_FORMAT_R8G8B8A8_UNORM;
 					conversionTarget = CONVERSION_TARGET_RGBA_U8;
 				} break;
@@ -765,7 +757,7 @@ Texture2d::Texture2d( vk::DeviceRef device, const ImageSourceRef &imageSource, F
 					}
 					else {
 						SurfaceConstraints constraints = SurfaceConstraints();
-						auto mip0 = Surface8u( imageSource, constraints, true );
+						auto			   mip0		   = Surface8u( imageSource, constraints, true );
 						copyMipsToImage<uint8_t>( getDevice().get(), mip0, 0, mImage.get() );
 					}
 				} break;
@@ -808,6 +800,54 @@ void Texture2d::bind( uint32_t binding )
 {
 	auto ctx = vk::context();
 	ctx->bindTexture( this, binding );
+}
+
+Rectf Texture2d::getAreaTexCoords( const Area &area ) const
+{
+	Rectf result;
+
+	if ( mUnnormalizedCoordinates ) {
+		result = Rectf( area ) + mCleanBounds.getUL();
+	}
+	else {
+		float actualWidth  = static_cast<float>( getActualWidth() );
+		float actualHeight = static_cast<float>( getActualHeight() );
+
+		result.x1 = ( mCleanBounds.x1 + area.x1 ) / (float)actualWidth;
+		result.y1 = ( mCleanBounds.y1 + area.y1 ) / (float)actualHeight;
+		result.x2 = ( mCleanBounds.x1 + area.x2 ) / (float)actualWidth;
+		result.y2 = ( mCleanBounds.y1 + area.y2 ) / (float)actualHeight;
+	}
+
+	/*
+		if ( mTarget == GL_TEXTURE_2D
+	#if !defined( CINDER_GL_ES )
+			 || mTarget == GL_TEXTURE_2D_MULTISAMPLE
+	#elif defined( CINDER_ANDROID )
+			 || mTarget == GL_TEXTURE_EXTERNAL_OES
+	#endif
+		) { // normalized 0-1.0 coordinates
+			result.x1 = ( mCleanBounds.x1 + area.x1 ) / (float)mActualSize.x;
+			result.y1 = ( mCleanBounds.y1 + area.y1 ) / (float)mActualSize.y;
+			result.x2 = ( mCleanBounds.x1 + area.x2 ) / (float)mActualSize.x;
+			result.y2 = ( mCleanBounds.y1 + area.y2 ) / (float)mActualSize.y;
+
+			if ( !mTopDown ) {
+				result.y1 = 1 - result.y1;
+				result.y2 = 1 - result.y2;
+			}
+		}
+		else { // rectangular (pixel) coordinates
+			result = Rectf( area ) + mCleanBounds.getUL();
+
+			if ( !mTopDown ) {
+				result.y1 = mActualSize.y - result.y1;
+				result.y2 = mActualSize.y - result.y2;
+			}
+		}
+	*/
+
+	return result;
 }
 
 /////////////////////////////////////////////////////////////////////////////////

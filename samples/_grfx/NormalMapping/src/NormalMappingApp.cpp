@@ -326,16 +326,16 @@ void NormalMappingApp::draw()
 			gl::popModelMatrix();
 		}
 	
-		//// render normals, tangents and bitangents if necessary
-		//if( mShowNormalsAndTangents ) {
-		//	// use a default shader for this scope
-		//	gl::ScopedGlslProg glslProgScope( gl::getStockShader( gl::ShaderDef().color() ) );
-		//
-		//	gl::pushModelMatrix();
-		//	gl::multModelMatrix( mMeshTransform );
-		//	gl::draw( mMeshDebug );
-		//	gl::popModelMatrix();
-		//}
+		// render normals, tangents and bitangents if necessary
+		if( mShowNormalsAndTangents ) {
+			//// use a default shader for this scope
+			//gl::ScopedGlslProg glslProgScope( gl::getStockShader( gl::ShaderDef().color() ) );
+			//
+			//gl::pushModelMatrix();
+			//gl::multModelMatrix( mMeshTransform );
+			//gl::draw( mMeshDebug );
+			//gl::popModelMatrix();
+		}
 
 		// get ready to render in 2D again
 		gl::disableDepthWrite();
@@ -343,13 +343,13 @@ void NormalMappingApp::draw()
 
 		gl::popMatrices();
 
-		//// render the copyright message
-		//Area centered = Area::proportionalFit( mCopyrightMap->getBounds(), getWindowBounds(), true, false );
-		//centered.offset( ivec2( 0, ( getWindowHeight() - centered.y2 ) - 20 ) );
-		//
-		//gl::enableAlphaBlending();
-		//gl::draw( mCopyrightMap, centered );
-		//gl::disableAlphaBlending();
+		// render the copyright message
+		Area centered = Area::proportionalFit( mCopyrightMap->getBounds(), getWindowBounds(), true, false );
+		centered.offset( ivec2( 0, ( getWindowHeight() - centered.y2 ) - 20 ) );
+		
+		gl::enableAlphaBlending();
+		gl::draw( mCopyrightMap, centered );
+		gl::disableAlphaBlending();
 	}
 }
 

@@ -2,6 +2,7 @@
 
 #include "cinder/vk/ChildObject.h"
 #include "cinder/vk/Pipeline.h"
+#include "cinder/vk/StockShaders.h"
 #include "cinder/Camera.h"
 #include "cinder/CinderGlm.h"
 
@@ -11,7 +12,8 @@ namespace cinder::vk {
 //!
 //!
 class Context
-	: public vk::DeviceChildObject
+	: public vk::DeviceChildObject,
+	  public std::enable_shared_from_this<Context>
 {
 private:
 	//
@@ -83,6 +85,8 @@ public:
 	void			submit( const std::vector<SemaphoreInfo> &waits, const std::vector<SemaphoreInfo> &signals );
 	void			waitForCompletion();
 
+	vk::StockShaderManager *getStockShaderManager();
+
 	bool isRenderable() const { return ( mWidth > 0 ) && ( mHeight > 0 ); }
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +106,17 @@ public:
 	std::vector<ci::mat4> &getViewMatrixStack() { return mViewMatrixStack; }
 	std::vector<ci::mat4> &getProjectionMatrixStack() { return mProjectionMatrixStack; }
 
+	void					viewport( const std::pair<ivec2, ivec2> &viewport );
+	void					pushViewport( const std::pair<ivec2, ivec2> &viewport );
+	void					pushViewport();
+	void					popViewport( bool forceRestore = false );
 	std::pair<ivec2, ivec2> getViewport();
+
+	void					setScissor( const std::pair<ivec2, ivec2> &scissor );
+	void					pushScissor( const std::pair<ivec2, ivec2> &scissor );
+	void					pushScissor();
+	void					popScissor( bool forceRestore = false );
+	std::pair<ivec2, ivec2> getScissor();
 
 	void			bindShaderProg( const vk::ShaderProg *prog );
 	void			bindShaderProg( const vk::ShaderProgRef &prog ) { bindShaderProg( prog.get() ); }
@@ -127,6 +141,15 @@ public:
 	void	 popActiveTexture( bool forceRestore = false );
 	uint32_t getActiveTexture();
 
+	void enableBlend( bool enable = true, uint32_t attachmentIndex = 0 );
+	void disableBlend( uint32_t attachmentIndex = 0 ) { enableBlend( false, attachmentIndex ); }
+	void blendFunc( VkBlendFactor sfactor, VkBlendFactor dfactor, uint32_t attachmentIndex = 0 );
+	void blendFuncSeparate( VkBlendFactor srcRGB, VkBlendFactor dstRGB, VkBlendFactor srcAlpha, VkBlendFactor dstAlpha, uint32_t attachmentIndex = 0 );
+	void pushBlendFuncSeparate( VkBlendFactor srcRGB, VkBlendFactor dstRGB, VkBlendFactor srcAlpha, VkBlendFactor dstAlpha, uint32_t attachmentIndex = 0 );
+	void pushBlendFuncSeparate( uint32_t attachmentIndex = 0 );
+	void popBlendFuncSeparate( bool forceRestore = false, uint32_t attachmentIndex = 0 );
+	void getBlendFuncSeparate( VkBlendFactor *resultSrcRGB, VkBlendFactor *resultDstRGB, VkBlendFactor *resultSrcAlpha, VkBlendFactor *resultDstAlpha, uint32_t attachmentIndex = 0 );
+
 	const ColorAf &getCurrentColor() const { return mColor; }
 	void		   setCurrentColor( const ColorAf &color ) { mColor = color; }
 	void		   setDefaultShaderVars();
@@ -149,14 +172,14 @@ public:
 	void bindDefaultDescriptorSet();
 	void bindIndexBuffers( const vk::BufferedMeshRef &mesh );
 	void bindVertexBuffers( const vk::BufferedMeshRef &mesh );
-	void bindGraphicsPipeline();
+	void bindGraphicsPipeline( const vk::PipelineLayout *pipelineLayout = nullptr );
 	void draw( int32_t firstVertex, int32_t vertexCount );
 	void drawIndexed( int32_t firstIndex, int32_t indexCount );
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	
-	void registerChild(vk::ContextChildObject* child);
-	void unregisterChild(vk::ContextChildObject* child);
+
+	void registerChild( vk::ContextChildObject *child );
+	void unregisterChild( vk::ContextChildObject *child );
 
 private:
 	Context( vk::DeviceRef device, uint32_t width, uint32_t height, const Options &options );
@@ -281,7 +304,8 @@ private:
 		friend class Context;
 	};
 
-	std::vector<vk::ContextChildObject*> mChildren;
+	std::unique_ptr<vk::StockShaderManager> mStockShaderManager;
+	std::vector<vk::ContextChildObject *>	mChildren;
 
 	uint32_t			  mNumFramesInFlight   = 0;
 	uint32_t			  mWidth			   = 0;
@@ -318,6 +342,11 @@ private:
 	std::vector<const vk::GlslProg *>						  mGlslProgStack;
 	vk::Pipeline::GraphicsPipelineCreateInfo				  mGraphicsState;
 	uint64_t												  mCurrentGraphicsPipelineHash;
+
+	std::vector<VkBlendFactor> mBlendSrcRgbStack[CINDER_MAX_RENDER_TARGETS];
+	std::vector<VkBlendFactor> mBlendDstRgbStack[CINDER_MAX_RENDER_TARGETS];
+	std::vector<VkBlendFactor> mBlendSrcAlphaStack[CINDER_MAX_RENDER_TARGETS];
+	std::vector<VkBlendFactor> mBlendDstAlphaStack[CINDER_MAX_RENDER_TARGETS];
 
 	vk::DescriptorSetLayoutRef			mDefaultSetLayout;
 	vk::PipelineLayoutRef				mDefaultPipelineLayout;

@@ -40,6 +40,8 @@ public:
 
 	const std::vector<vk::UniformBlockRef> &getUniformBlocks() const { return mUniformBlocks; }
 
+	const std::vector<vk::UniformBlockRef> &getPushConstantsBlocks() const { return mPushContantsBlocks; }
+
 	VkShaderModule getShaderModuleHandle() const { return mShaderModuleHandle; }
 
 private:
@@ -48,6 +50,7 @@ private:
 	void parseInterfaceVariables( const spv_reflect::ShaderModule &reflection );
 	void parseDescriptorBindings( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings );
 	void parseUniformBlocks( const std::vector<SpvReflectDescriptorBinding *> &spirvBindings );
+	void parsePushConstantsBlocks( const std::vector<SpvReflectBlockVariable *> &pushConstantsBlocks );
 
 private:
 	VkShaderStageFlagBits			   mShaderStage = static_cast<VkShaderStageFlagBits>( 0 );
@@ -58,6 +61,7 @@ private:
 	std::vector<vk::InterfaceVariable> mNullVariables;
 	std::vector<vk::DescriptorBinding> mDescriptorBindings;
 	std::vector<vk::UniformBlockRef>   mUniformBlocks;
+	std::vector<vk::UniformBlockRef>   mPushContantsBlocks;
 	vk::UniformBlock					 *mDefaultUniformBlock = nullptr;
 
 	VkShaderModule mShaderModuleHandle = VK_NULL_HANDLE;
@@ -199,9 +203,9 @@ public:
 
 	const std::map<uint32_t, std::vector<DescriptorBinding>> &getSetBindings() const { return mSetBindings; }
 
-	// const vk::UniformBlock *getDefaultUniformBlock() const { return mDefaultUniformBlock; }
-
 	const std::vector<vk::UniformBufferRef> &getDefaultUniformBuffers() const { return mDefaultUniformBuffers; }
+
+	const std::vector<vk::UniformBlockRef> &getPushConstantsBlocks() const { return mPushConstantsBlocks; }
 
 	void uniform( const std::string &name, bool value );
 	void uniform( const std::string &name, int32_t value );
@@ -251,8 +255,9 @@ private:
 	void parseModules();
 	void parseDscriptorBindings( const vk::ShaderModule *shader );
 	void parseUniformBlocks( const vk::ShaderModule *shader );
+	void parsePushConstantsBlocks( const vk::ShaderModule* shader );
 
-	virtual void flightSync(uint32_t currentFrameIndex, uint32_t previousFrameIndex) override {}
+	virtual void flightSync( uint32_t currentFrameIndex, uint32_t previousFrameIndex ) override {}
 
 	template <typename T>
 	void setUniform( const std::string &name, const T &value );
@@ -273,6 +278,7 @@ private:
 	std::vector<vk::UniformBufferRef>					   mUniformBuffers;
 	std::vector<vk::UniformBufferRef>					   mDefaultUniformBuffers;
 	std::map<std::string, vk::UniformBufferRef>			   mUniforNameToBuffer;
+	std::vector<vk::UniformBlockRef>					   mPushConstantsBlocks;
 };
 
 //! @class GlslProg

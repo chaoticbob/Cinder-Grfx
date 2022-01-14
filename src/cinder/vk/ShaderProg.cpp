@@ -224,9 +224,26 @@ ShaderModule::ShaderModule( vk::DeviceRef device, size_t spirvSize, const char *
 			}
 		}
 
+		// Push constants blocks
+		std::vector<SpvReflectBlockVariable *> pushConstantsBlocks;
+		{
+			uint32_t		 count	= 0;
+			SpvReflectResult spvres = reflection.EnumeratePushConstantBlocks( &count, nullptr );
+			if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+				throw VulkanExc( "SPIR-V reflection: enumerate push constants block count failed" );
+			}
+
+			pushConstantsBlocks.resize( count );
+			spvres = reflection.EnumeratePushConstantBlocks( &count, dataPtr( pushConstantsBlocks ) );
+			if ( spvres != SPV_REFLECT_RESULT_SUCCESS ) {
+				throw VulkanExc( "SPIR-V reflection: enumerate push constants block failed" );
+			}
+		}
+
 		parseInterfaceVariables( reflection );
 		parseDescriptorBindings( spirvBindings );
 		parseUniformBlocks( spirvBindings );
+		parsePushConstantsBlocks( pushConstantsBlocks );
 	}
 
 	// Creat shader module
@@ -911,6 +928,23 @@ void ShaderModule::parseUniformBlocks( const std::vector<SpvReflectDescriptorBin
 	}
 }
 
+void ShaderModule::parsePushConstantsBlocks( const std::vector<SpvReflectBlockVariable *> &pushConstantsBlocks )
+{
+	bool isGlsl = ( mSourceLanguage == SpvSourceLanguageGLSL );
+	bool isHlsl = ( mSourceLanguage == SpvSourceLanguageHLSL );
+
+	for ( size_t i = 0; i < pushConstantsBlocks.size(); ++i ) {
+		const SpvReflectBlockVariable *pBlockVar = pushConstantsBlocks[i];
+
+		std::vector<Uniform> uniforms;
+		parseUniformBlock( isGlsl, *pBlockVar, uniforms );
+
+		std::string name		 = ( pBlockVar->name != nullptr ) ? pBlockVar->name : "";
+		auto		uniformBlock = std::make_unique<UniformBlock>( name, pBlockVar->size, uniforms );
+		mPushContantsBlocks.push_back( std::move( uniformBlock ) );
+	}
+}
+
 const std::vector<vk::InterfaceVariable> &ShaderModule::getVertexAttributes() const
 {
 	return ( mShaderStage == VK_SHADER_STAGE_VERTEX_BIT ) ? mInputVariables : mNullVariables;
@@ -1335,6 +1369,13 @@ void ShaderProg::parseModules()
 			mUniforNameToBuffer[uniformName] = buffer;
 		}
 	}
+
+	parsePushConstantsBlocks( mVs.get() );
+	parsePushConstantsBlocks( mPs.get() );
+	parsePushConstantsBlocks( mGs.get() );
+	parsePushConstantsBlocks( mDs.get() );
+	parsePushConstantsBlocks( mHs.get() );
+	parsePushConstantsBlocks( mCs.get() );
 }
 
 void ShaderProg::parseDscriptorBindings( const vk::ShaderModule *shader )
@@ -1479,6 +1520,18 @@ void ShaderProg::parseUniformBlocks( const vk::ShaderModule *shader )
 		}
 
 		mUniformBlocks.push_back( block );
+	}
+}
+
+void ShaderProg::parsePushConstantsBlocks( const vk::ShaderModule *shader )
+{
+	if ( shader == nullptr ) {
+		return;
+	}
+
+	auto &blocks = shader->getPushConstantsBlocks();
+	for ( const auto &block : blocks ) {
+		mPushConstantsBlocks.push_back( block );
 	}
 }
 
@@ -1875,6 +1928,7 @@ std::vector<char> GlslProg::compileShader(
 		const char *infoLog = glslang_shader_get_info_log( shader );
 		if ( infoLog != nullptr ) {
 			CI_LOG_E( "GLSL preprocess failed (info): " << infoLog );
+			CI_LOG_E(text);
 		}
 
 		const char *debugLog = glslang_shader_get_info_debug_log( shader );

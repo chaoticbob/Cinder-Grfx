@@ -30,6 +30,28 @@ CI_API void clearDepth( const float depth );
 CI_API void clearStencil( const int s );
 
 CI_API std::pair<ivec2, ivec2> getViewport();
+CI_API void viewport( const std::pair<ivec2, ivec2> positionAndSize );
+CI_API inline void viewport( int x, int y, int width, int height ) { viewport( std::pair<ivec2, ivec2>( ivec2( x, y ), ivec2( width, height ) ) ); }
+CI_API inline void viewport( const ivec2 &position, const ivec2 &size ) { viewport( std::pair<ivec2, ivec2>( position, size ) ); }
+CI_API inline void viewport( const ivec2 &size ) { viewport( ivec2(), size ); }
+CI_API void pushViewport( const std::pair<ivec2, ivec2> positionAndSize );
+CI_API inline void pushViewport() { pushViewport( getViewport() ); }
+CI_API inline void pushViewport( int x, int y, int width, int height ) { pushViewport( std::pair<ivec2, ivec2>( ivec2( x, y ), ivec2( width, height ) ) ); }
+CI_API inline void pushViewport( const ivec2 &position, const ivec2 &size ) { pushViewport( std::pair<ivec2, ivec2>( position, size ) ); }
+CI_API inline void pushViewport( const ivec2 &size ) { pushViewport( ivec2(), size ); }
+CI_API void popViewport();
+
+CI_API std::pair<ivec2, ivec2> getScissor();
+CI_API void scissor( const std::pair<ivec2, ivec2> positionAndSize );
+CI_API inline void scissor( int x, int y, int width, int height ) { scissor( std::pair<ivec2, ivec2>( ivec2( x, y ), ivec2( width, height ) ) ); }
+CI_API inline void scissor( const ivec2 &position, const ivec2 &size ) { scissor( std::pair<ivec2, ivec2>( position, size ) ); }
+
+CI_API void enableBlending( bool enable = true, uint32_t attachmentIndex = 0 );
+CI_API inline void disableBlending( uint32_t attachmentIndex = 0) { enableBlending( false, attachmentIndex ); }
+CI_API void enableAlphaBlending( bool enable = true, uint32_t attachmentIndex = 0 );
+CI_API void enableAlphaBlendingPremult( uint32_t attachmentIndex = 0);
+CI_API inline void disableAlphaBlending( uint32_t attachmentIndex = 0) { disableBlending(); }
+CI_API void enableAdditiveBlending(uint32_t attachmentIndex = 0 );
 
 //! Disables reading / testing from the depth buffer. Disables \c GL_DEPTH_TEST
 CI_API void disableDepthRead();

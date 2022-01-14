@@ -13,7 +13,7 @@ Context *context()
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // Command buffer functions
 
-//void setRenderPass( const std::vector<const vk::ImageView *> &colorAttachments, const vk::ImageView *pDepthStencilAttachment )
+// void setRenderPass( const std::vector<const vk::ImageView *> &colorAttachments, const vk::ImageView *pDepthStencilAttachment )
 //{
 //	vk::CommandBuffer::RenderingInfo ri = {};
 //
@@ -27,7 +27,7 @@ Context *context()
 //
 //	auto ctx = vk::context();
 //	ctx->getCommandBuffer()->beginRendering( ri );
-//}
+// }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
 // OpenGL style functions
@@ -82,9 +82,69 @@ void clearStencil( const int stencil )
 
 std::pair<ivec2, ivec2> getViewport()
 {
-	auto ctx = vk::context();
+	auto ctx  = vk::context();
 	auto view = ctx->getViewport();
 	return view;
+}
+
+void viewport( const std::pair<ivec2, ivec2> positionAndSize )
+{
+	auto ctx = vk::context();
+	ctx->viewport( positionAndSize );
+}
+
+void pushViewport( const std::pair<ivec2, ivec2> positionAndSize )
+{
+	auto ctx = vk::context();
+	ctx->pushViewport( positionAndSize );
+}
+
+void popViewport()
+{
+	auto ctx = vk::context();
+	ctx->popViewport();
+}
+
+std::pair<ivec2, ivec2> getScissor()
+{
+	auto ctx	 = vk::context();
+	auto scissor = ctx->getScissor();
+	return scissor;
+}
+
+void scissor( const std::pair<ivec2, ivec2> positionAndSize )
+{
+	auto ctx = vk::context();
+	ctx->setScissor( positionAndSize );
+}
+
+void enableBlending( bool enable, uint32_t attachmentIndex )
+{
+	auto ctx = vk::context();
+	ctx->enableBlend( enable, attachmentIndex );
+}
+
+void enableAlphaBlending( bool enable, uint32_t attachmentIndex )
+{
+	auto ctx = vk::context();
+	ctx->enableBlend( enable, attachmentIndex );
+	if ( enable ) {
+		ctx->blendFunc( VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA  );
+	}
+}
+
+void enableAlphaBlendingPremult( uint32_t attachmentIndex )
+{
+	auto ctx = vk::context();
+	ctx->enableBlend( true, attachmentIndex );
+	ctx->blendFunc( VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA );
+}
+
+void enableAdditiveBlending( uint32_t attachmentIndex )
+{
+	auto ctx = vk::context();
+	ctx->enableBlend( true, attachmentIndex );
+	ctx->blendFunc( VK_BLEND_FACTOR_SRC_ALPHA, VK_BLEND_FACTOR_ONE );
 }
 
 void disableDepthRead()
@@ -278,31 +338,27 @@ mat3 calcNormalMatrix()
 {
 	return glm::inverseTranspose( glm::mat3( getModelView() ) );
 }
-	
+
 mat3 calcModelMatrixInverseTranspose()
 {
 	auto m = glm::inverseTranspose( getModelMatrix() );
 	return mat3( m );
 }
-	
+
 mat4 calcViewportMatrix()
 {
 	auto curViewport = vk::getViewport();
-	
+
 	const float a = ( curViewport.second.x - curViewport.first.x ) / 2.0f;
 	const float b = ( curViewport.second.y - curViewport.first.y ) / 2.0f;
 	const float c = 1.0f / 2.0f;
-	
+
 	const float tx = ( curViewport.second.x + curViewport.first.x ) / 2.0f;
 	const float ty = ( curViewport.second.y + curViewport.second.y ) / 2.0f;
 	const float tz = 1.0f / 2.0f;
-	
+
 	return mat4(
-		a, 0, 0, 0,
-		0, b, 0, 0,
-		0, 0, c, 0,
-		tx, ty, tz, 1
-	);
+		a, 0, 0, 0, 0, b, 0, 0, 0, 0, c, 0, tx, ty, tz, 1 );
 }
 
 void setMatricesWindowPersp( int screenWidth, int screenHeight, float fovDegrees, float nearPlane, float farPlane, bool originUpperLeft )
@@ -310,43 +366,40 @@ void setMatricesWindowPersp( int screenWidth, int screenHeight, float fovDegrees
 	auto ctx = vk::context();
 
 	CameraPersp cam( screenWidth, screenHeight, fovDegrees, nearPlane, farPlane );
-	ctx->getModelMatrixStack().back() = mat4();
+	ctx->getModelMatrixStack().back()	   = mat4();
 	ctx->getProjectionMatrixStack().back() = cam.getProjectionMatrix();
-	ctx->getViewMatrixStack().back() = cam.getViewMatrix();
-	if( originUpperLeft ) {
-		ctx->getViewMatrixStack().back() *= glm::scale( vec3( 1, -1, 1 ) );								// invert Y axis so increasing Y goes down.
-		ctx->getViewMatrixStack().back() *= glm::translate( vec3( 0, (float) - screenHeight, 0 ) );		// shift origin up to upper-left corner.
+	ctx->getViewMatrixStack().back()	   = cam.getViewMatrix();
+	if ( originUpperLeft ) {
+		ctx->getViewMatrixStack().back() *= glm::scale( vec3( 1, -1, 1 ) );						  // invert Y axis so increasing Y goes down.
+		ctx->getViewMatrixStack().back() *= glm::translate( vec3( 0, (float)-screenHeight, 0 ) ); // shift origin up to upper-left corner.
 	}
 }
 
-void setMatricesWindowPersp( const ci::ivec2& screenSize, float fovDegrees, float nearPlane, float farPlane, bool originUpperLeft )
+void setMatricesWindowPersp( const ci::ivec2 &screenSize, float fovDegrees, float nearPlane, float farPlane, bool originUpperLeft )
 {
 	setMatricesWindowPersp( screenSize.x, screenSize.y, fovDegrees, nearPlane, farPlane, originUpperLeft );
 }
 
 void setMatricesWindow( int screenWidth, int screenHeight, bool originUpperLeft )
 {
-	auto ctx = vk::context();
+	auto ctx						  = vk::context();
 	ctx->getModelMatrixStack().back() = mat4();
-	ctx->getViewMatrixStack().back() = mat4();
+	ctx->getViewMatrixStack().back()  = mat4();
 
 	float sx = 2.0f / (float)screenWidth;
 	float sy = 2.0f / (float)screenHeight;
 	float ty = -1;
 
-	if( originUpperLeft ) {
+	if ( originUpperLeft ) {
 		sy *= -1;
 		ty *= -1;
 	}
 
 	mat4 &m = ctx->getProjectionMatrixStack().back();
-	m = mat4( sx, 0,  0, 0,
-			  0, sy,  0, 0,
-			  0,  0, -1, 0,
-			 -1, ty,  0, 1 );
+	m		= mat4( sx, 0, 0, 0, 0, sy, 0, 0, 0, 0, -1, 0, -1, ty, 0, 1 );
 }
 
-void setMatricesWindow( const ci::ivec2& screenSize, bool originUpperLeft )
+void setMatricesWindow( const ci::ivec2 &screenSize, bool originUpperLeft )
 {
 	setMatricesWindow( screenSize.x, screenSize.y, originUpperLeft );
 }
@@ -359,19 +412,19 @@ void rotate( const quat &quat )
 
 void rotate( float angleRadians, const vec3 &axis )
 {
-	if( math<float>::abs( angleRadians ) > EPSILON_VALUE ) {
+	if ( math<float>::abs( angleRadians ) > EPSILON_VALUE ) {
 		auto ctx = vk::context();
 		ctx->getModelMatrixStack().back() *= glm::rotate( angleRadians, axis );
 	}
 }
 
-void scale( const ci::vec3& v )
+void scale( const ci::vec3 &v )
 {
 	auto ctx = vk::context();
 	ctx->getModelMatrixStack().back() *= glm::scale( v );
 }
 
-void translate( const ci::vec3& v )
+void translate( const ci::vec3 &v )
 {
 	auto ctx = vk::context();
 	ctx->getModelMatrixStack().back() *= glm::translate( v );
@@ -412,6 +465,5 @@ void color( const ci::ColorA8u &c )
 	auto ctx = vk::context();
 	ctx->setCurrentColor( c );
 }
-
 
 } // namespace cinder::vk

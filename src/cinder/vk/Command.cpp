@@ -4,6 +4,8 @@
 #include "cinder/vk/Device.h"
 #include "cinder/vk/Image.h"
 #include "cinder/vk/Pipeline.h"
+#include "cinder/vk/Sampler.h"
+#include "cinder/vk/Texture.h"
 #include "cinder/app/RendererVk.h"
 
 namespace cinder::vk {
@@ -247,6 +249,53 @@ void CommandBuffer::end()
 	}
 
 	mRecording = false;
+}
+void CommandBuffer::pushConstants(
+	const vk::PipelineLayout *pipelineLayout,
+	VkShaderStageFlags		  stageFlags,
+	uint32_t				  offset,
+	uint32_t				  size,
+	const void			   *pValues )
+{
+	CI_VK_DEVICE_FN( CmdPushConstants(
+		getCommandBufferHandle(),
+		pipelineLayout->getPipelineLayoutHandle(),
+		stageFlags,
+		offset,
+		size,
+		pValues ) );
+}
+
+void CommandBuffer::pushDescriptor(
+	VkPipelineBindPoint		  pipelineBindPoint,
+	const vk::PipelineLayout *pipelineLayout,
+	uint32_t				  binding,
+	uint32_t				  set,
+	const vk::TextureBase	  *pTexture )
+{
+	VkDescriptorImageInfo imageInfo = {};
+	imageInfo.sampler				= pTexture->getSampler()->getSamplerHandle();
+	imageInfo.imageView				= pTexture->getSampledImageView()->getImageViewHandle();
+	imageInfo.imageLayout			= VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+	VkWriteDescriptorSet write = { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+	write.pNext				   = nullptr;
+	write.dstSet			   = VK_NULL_HANDLE; // ignored
+	write.dstBinding		   = binding;
+	write.dstArrayElement	   = 0;
+	write.descriptorCount	   = 1;
+	write.descriptorType	   = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	write.pImageInfo		   = &imageInfo;
+	write.pBufferInfo		   = nullptr;
+	write.pTexelBufferView	   = nullptr;
+
+	CI_VK_DEVICE_FN( CmdPushDescriptorSetKHR(
+		getCommandBufferHandle(),
+		pipelineBindPoint,
+		pipelineLayout->getPipelineLayoutHandle(),
+		set,
+		1,
+		&write ) );
 }
 
 void CommandBuffer::bindDescriptorSets(
