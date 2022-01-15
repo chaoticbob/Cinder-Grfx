@@ -54,13 +54,11 @@ set(INC_PATH ${CINDER_GRFX_PATH}/include)
 set(SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
 list(APPEND APP_HDR_FILES
-    ${INC_PATH}/cinder/app/GrfxRenderer.h
     ${INC_PATH}/cinder/app/RendererDx12.h
     ${INC_PATH}/cinder/app/RendererVk.h
 )
 
 list(APPEND APP_SRC_FILES
-    ${SRC_PATH}/cinder/app/GrfxRenderer.cpp
     ${SRC_PATH}/cinder/app/RendererDx12.cpp
     ${SRC_PATH}/cinder/app/RendererVk.cpp
 )

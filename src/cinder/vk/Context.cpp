@@ -486,7 +486,7 @@ vk::StockShaderManager *Context::getStockShaderManager()
 void Context::viewport( const std::pair<ivec2, ivec2> &viewport )
 {
 	if ( setStackState( mViewportStack, viewport ) ) {
-		getCommandBuffer()->setViewport(
+		getCurrentCommandBuffer()->setViewport(
 			static_cast<float>( viewport.first.x ),
 			static_cast<float>( viewport.first.y ),
 			static_cast<float>( viewport.second.x ),
@@ -499,7 +499,7 @@ void Context::viewport( const std::pair<ivec2, ivec2> &viewport )
 void Context::pushViewport( const std::pair<ivec2, ivec2> &viewport )
 {
 	if ( pushStackState( mViewportStack, viewport ) ) {
-		getCommandBuffer()->setViewport(
+		getCurrentCommandBuffer()->setViewport(
 			static_cast<float>( viewport.first.x ),
 			static_cast<float>( viewport.first.y ),
 			static_cast<float>( viewport.second.x ),
@@ -521,7 +521,7 @@ void Context::popViewport( bool forceRestore )
 	}
 	else if ( popStackState( mViewportStack ) || forceRestore ) {
 		auto viewport = getViewport();
-		getCommandBuffer()->setViewport(
+		getCurrentCommandBuffer()->setViewport(
 			static_cast<float>( viewport.first.x ),
 			static_cast<float>( viewport.first.y ),
 			static_cast<float>( viewport.second.x ),
@@ -553,7 +553,7 @@ std::pair<ivec2, ivec2> Context::getViewport()
 void Context::setScissor( const std::pair<ivec2, ivec2> &scissor )
 {
 	if ( setStackState( mScissorStack, scissor ) ) {
-		getCommandBuffer()->setScissor(
+		getCurrentCommandBuffer()->setScissor(
 			scissor.first.x,
 			scissor.first.y,
 			static_cast<uint32_t>( scissor.second.x ),
@@ -564,7 +564,7 @@ void Context::setScissor( const std::pair<ivec2, ivec2> &scissor )
 void Context::pushScissor( const std::pair<ivec2, ivec2> &scissor )
 {
 	if ( pushStackState( mScissorStack, scissor ) ) {
-		getCommandBuffer()->setScissor(
+		getCurrentCommandBuffer()->setScissor(
 			scissor.first.x,
 			scissor.first.y,
 			static_cast<uint32_t>( scissor.second.x ),
@@ -584,7 +584,7 @@ void Context::popScissor( bool forceRestore )
 	}
 	else if ( popStackState( mScissorStack ) || forceRestore ) {
 		auto scissor = getScissor();
-		getCommandBuffer()->setScissor(
+		getCurrentCommandBuffer()->setScissor(
 			scissor.first.x,
 			scissor.first.y,
 			static_cast<uint32_t>( scissor.second.x ),
@@ -1077,14 +1077,14 @@ void Context::clearColorAttachment( uint32_t index )
 	const ColorA	 &value		 = mClearValues.color;
 	VkClearColorValue clearValue = { value.r, value.g, value.b, value.a };
 
-	getCommandBuffer()->clearColorAttachment( index, clearValue, rect );
+	getCurrentCommandBuffer()->clearColorAttachment( index, clearValue, rect );
 }
 
 void Context::clearDepthStencilAttachment( VkImageAspectFlags aspectMask )
 {
 	VkRect2D rect = getCurrentFrame().depthStencil->getArea();
 
-	getCommandBuffer()->clearDepthStencilAttachment( mClearValues.depth, mClearValues.stencil, rect, aspectMask );
+	getCurrentCommandBuffer()->clearDepthStencilAttachment( mClearValues.depth, mClearValues.stencil, rect, aspectMask );
 }
 
 void Context::bindDefaultDescriptorSet()
@@ -1141,7 +1141,7 @@ void Context::bindDefaultDescriptorSet()
 			nullptr ) );
 	}
 
-	getCommandBuffer()->bindDescriptorSets(
+	getCurrentCommandBuffer()->bindDescriptorSets(
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
 		mDefaultPipelineLayout,
 		0,
@@ -1196,7 +1196,7 @@ void Context::assignVertexAttributeLocations()
 
 void Context::bindIndexBuffers( const vk::BufferedMeshRef &mesh )
 {
-	getCommandBuffer()->bindIndexBuffer( mesh->getIndices(), 0, mesh->getIndexType() );
+	getCurrentCommandBuffer()->bindIndexBuffer( mesh->getIndices(), 0, mesh->getIndexType() );
 }
 
 void Context::bindVertexBuffers( const vk::BufferedMeshRef &mesh )
@@ -1209,7 +1209,7 @@ void Context::bindVertexBuffers( const vk::BufferedMeshRef &mesh )
 		buffers.push_back( it.second );
 	}
 
-	getCommandBuffer()->bindVertexBuffers( 0, buffers );
+	getCurrentCommandBuffer()->bindVertexBuffers( 0, buffers );
 }
 
 void Context::bindGraphicsPipeline( const vk::PipelineLayout *pipelineLayout )
@@ -1230,23 +1230,23 @@ void Context::bindGraphicsPipeline( const vk::PipelineLayout *pipelineLayout )
 	}
 
 	auto &pipeline = mGraphicsPipelines[hash];
-	getCommandBuffer()->bindPipeline( VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline );
+	getCurrentCommandBuffer()->bindPipeline( VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline );
 }
 
 void Context::setDynamicStates( bool force )
 {
 	if ( mDynamicStates.depthWrite.isDirty() || force ) {
-		getCommandBuffer()->setDepthWriteEnable( mDynamicStates.depthWrite.getValue() );
+		getCurrentCommandBuffer()->setDepthWriteEnable( mDynamicStates.depthWrite.getValue() );
 		mDynamicStates.depthWrite.setClean();
 	}
 
 	if ( mDynamicStates.depthTest.isDirty() || force ) {
-		getCommandBuffer()->setDepthTestEnable( mDynamicStates.depthTest.getValue() );
+		getCurrentCommandBuffer()->setDepthTestEnable( mDynamicStates.depthTest.getValue() );
 		mDynamicStates.depthTest.setClean();
 	}
 
 	if ( mDynamicStates.frontFace.isDirty() || force ) {
-		getCommandBuffer()->setFrontFace( mDynamicStates.frontFace.getValue() );
+		getCurrentCommandBuffer()->setFrontFace( mDynamicStates.frontFace.getValue() );
 		mDynamicStates.frontFace.setClean();
 	}
 }
@@ -1254,7 +1254,7 @@ void Context::setDynamicStates( bool force )
 void Context::draw( int32_t firstVertex, int32_t vertexCount )
 {
 	setDynamicStates();
-	getCommandBuffer()->draw( static_cast<uint32_t>( vertexCount ), 1, static_cast<uint32_t>( firstVertex ), 0 );
+	getCurrentCommandBuffer()->draw( static_cast<uint32_t>( vertexCount ), 1, static_cast<uint32_t>( firstVertex ), 0 );
 
 	getCurrentFrame().nextDrawCall( mDefaultSetLayout );
 }
@@ -1262,7 +1262,7 @@ void Context::draw( int32_t firstVertex, int32_t vertexCount )
 void Context::drawIndexed( int32_t firstIndex, int32_t indexCount )
 {
 	setDynamicStates();
-	getCommandBuffer()->drawIndexed( static_cast<uint32_t>( indexCount ), 1, static_cast<uint32_t>( firstIndex ), 0, 0 );
+	getCurrentCommandBuffer()->drawIndexed( static_cast<uint32_t>( indexCount ), 1, static_cast<uint32_t>( firstIndex ), 0, 0 );
 
 	getCurrentFrame().nextDrawCall( mDefaultSetLayout );
 }

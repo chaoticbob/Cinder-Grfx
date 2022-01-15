@@ -55,19 +55,19 @@ void draw( const vk::Texture2dRef &texture, const Area &srcArea, const Rectf &ds
 	auto pipelineLayout = ctx->getStockShaderManager()->getDrawTexturePipelineLayout();
 
 	auto modelViewProjection = vk::getModelViewProjection();
-	ctx->getCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof( modelViewProjection ), &modelViewProjection );
+	ctx->getCurrentCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof( modelViewProjection ), &modelViewProjection );
 
 	auto uPositionOffset = dstRect.getUpperLeft();
 	auto uPositionScale	 = dstRect.getSize();
 	auto uTexCoordOffset = texRect.getUpperLeft();
 	auto uTexCoordScale	 = texRect.getSize();
 
-	ctx->getCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 0 * sizeof( vec2 ), sizeof(vec2), &uPositionOffset );
-	ctx->getCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 1 * sizeof( vec2 ), sizeof(vec2), &uPositionScale );
-	ctx->getCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 2 * sizeof( vec2 ), sizeof(vec2), &uTexCoordOffset );
-	ctx->getCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 3 * sizeof( vec2 ), sizeof(vec2), &uTexCoordScale );
+	ctx->getCurrentCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 0 * sizeof( vec2 ), sizeof(vec2), &uPositionOffset );
+	ctx->getCurrentCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 1 * sizeof( vec2 ), sizeof(vec2), &uPositionScale );
+	ctx->getCurrentCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 2 * sizeof( vec2 ), sizeof(vec2), &uTexCoordOffset );
+	ctx->getCurrentCommandBuffer()->pushConstants( pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof( modelViewProjection ) + 3 * sizeof( vec2 ), sizeof(vec2), &uTexCoordScale );
 
-	ctx->getCommandBuffer()->pushDescriptor(
+	ctx->getCurrentCommandBuffer()->pushDescriptor(
 		VK_PIPELINE_BIND_POINT_GRAPHICS,
 		pipelineLayout,
 		0 + CINDER_CONTEXT_PS_BINDING_SHIFT_TEXTURE,
@@ -75,7 +75,7 @@ void draw( const vk::Texture2dRef &texture, const Area &srcArea, const Rectf &ds
 		texture.get() );
 
 	ctx->bindGraphicsPipeline( pipelineLayout );
-	ctx->getCommandBuffer()->draw( 6, 1, 0, 0 );
+	ctx->getCurrentCommandBuffer()->draw( 6, 1, 0, 0 );
 
 	// ScopedVao vaoScp( ctx->getDrawTextureVao() );
 	// ScopedBuffer vboScp( ctx->getDrawTextureVbo() );

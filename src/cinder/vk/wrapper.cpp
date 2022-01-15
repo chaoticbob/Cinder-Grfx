@@ -26,7 +26,7 @@ Context *context()
 //	}
 //
 //	auto ctx = vk::context();
-//	ctx->getCommandBuffer()->beginRendering( ri );
+//	ctx->getCurrentCommandBuffer()->beginRendering( ri );
 // }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

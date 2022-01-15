@@ -156,7 +156,7 @@ public:
 
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	vk::CommandBuffer *getCommandBuffer() const { return getCurrentFrame().commandBuffer.get(); }
+	vk::CommandBuffer *getCurrentCommandBuffer() const { return getCurrentFrame().commandBuffer.get(); }
 
 	uint64_t			 getFrameCount() const { return mFrameCount; }
 	uint32_t			 getFrameIndex() const { return mFrameIndex; }
