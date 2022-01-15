@@ -157,6 +157,16 @@ void RendererVk::setup( WindowImplMsw *windowImpl, RendererRef sharedRenderer )
 	setupFrames( windowImpl->getSize().x, windowImpl->getSize().y );
 }
 
+HWND RendererVk::getHwnd() const
+{
+	return mWindowImpl->getHwnd();
+}
+
+HDC RendererVk::getDc() const
+{
+	return mWindowImpl->getDc();
+}
+
 #elif defined( CINDER_LINUX )
 #if defined( CINDER_HEADLESS )
 void RendererVk::setup( ci::ivec2 renderSize, RendererRef sharedRenderer )

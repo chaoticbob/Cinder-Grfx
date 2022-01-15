@@ -15,7 +15,7 @@ RendererDx12::RendererDx12( const Options& options )
 #if defined( CINDER_MSW_DESKTOP )
 void RendererDx12::setup( WindowImplMsw* windowImpl, RendererRef sharedRenderer )
 {
-	this->mWindowImpl = windowImpl;
+	mWindowImpl = windowImpl;
 	
 	RendererDx12Ref sharedRendererDx12 = std::dynamic_pointer_cast<RendererDx12>(sharedRenderer);
 	if (!sharedRenderer) {

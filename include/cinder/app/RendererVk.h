@@ -1,6 +1,6 @@
 #pragma once
 
-#include "cinder/app/GrfxRenderer.h"
+#include "cinder/app/Renderer.h"
 #include "cinder/vk/Context.h"
 
 #include <vector>
@@ -10,26 +10,26 @@ namespace cinder::app {
 typedef std::shared_ptr<class RendererVk> RendererVkRef;
 
 class RendererVk
-	: public GrfxRenderer
+	: public ci::app::Renderer
 {
 public:
 	// clang-format off
-	class Options : public GrfxRenderer::Options
+	class Options
 	{
 	public:
 		Options(uint32_t apiVersion = VK_API_VERSION_1_1) : mApiVersion(apiVersion) {}
 
-		Options&	apiVersion(uint32_t apiVersion) { mApiVersion = apiVersion; return *this; }
-		Options&	enableValidation(bool value = true) { mEnableValidation = value ; return *this;}
-		Options&	addInstanceLayer(const std::string& value) { mInstanceLayers.push_back(value); return *this; }
-		Options&	addInstanceExtension(const std::string& value) { mInstanceExtensions.push_back(value); return *this; }
-		Options&	addDeviceExtension(const std::string& value) { mDeviceExtensions.push_back(value); return *this; }
-		Options&	gpuIndex(uint32_t index) { mGpuIndex = index; return*this; }
-		Options&	enableComputeQueue(bool value = true) { mEnableComputeQueue = value; return *this; }
-		Options&	enableTransferQueue(bool value = true) { mEnableTransferQueue = value; return *this; }
-		Options&	numFramesInFlight(uint32_t value) { mNumFramesInFlight = value; return *this; }
+		Options& apiVersion(uint32_t apiVersion) { mApiVersion = apiVersion; return *this; }
+		Options& enableValidation(bool value = true) { mEnableValidation = value ; return *this;}
+		Options& addInstanceLayer(const std::string& value) { mInstanceLayers.push_back(value); return *this; }
+		Options& addInstanceExtension(const std::string& value) { mInstanceExtensions.push_back(value); return *this; }
+		Options& addDeviceExtension(const std::string& value) { mDeviceExtensions.push_back(value); return *this; }
+		Options& gpuIndex(uint32_t index) { mGpuIndex = index; return*this; }
+		Options& enableComputeQueue(bool value = true) { mEnableComputeQueue = value; return *this; }
+		Options& enableTransferQueue(bool value = true) { mEnableTransferQueue = value; return *this; }
+		Options& numFramesInFlight(uint32_t value) { mNumFramesInFlight = value; return *this; }
 
-		Options&	msaa( int samples ) { GrfxRenderer::Options::msaa(samples); return *this; }
+		Options& msaa( uint32_t samples ) { mSamples = samples; return *this; }
 
 		uint32_t						getApiVersion() const { return mApiVersion; }
 		bool							getEnableValidation() const { return mEnableValidation; }
@@ -41,6 +41,8 @@ public:
 		bool							getEnableTransferQueue() const { return mEnableTransferQueue; }
 		uint32_t						getNumFramesInFlight() const { return mNumFramesInFlight; }
 
+		uint32_t getMsaa() const { return mSamples; }
+
 	private:
 		uint32_t					mApiVersion = VK_API_VERSION_1_1;
 		bool						mEnableValidation = false;
@@ -51,6 +53,7 @@ public:
 		bool						mEnableComputeQueue = false;
 		bool						mEnableTransferQueue = false;
 		uint32_t					mNumFramesInFlight = 2;
+		uint32_t					mSamples = 1;
 	};
 	// clang-format on
 
@@ -78,6 +81,8 @@ public:
 
 #if defined( CINDER_MSW_DESKTOP )
 	virtual void setup( WindowImplMsw *windowImpl, RendererRef sharedRenderer ) override;
+	virtual HWND getHwnd() const override;
+	virtual HDC	 getDc() const override;
 #elif defined( CINDER_LINUX )
 #if defined( CINDER_HEADLESS )
 	virtual void setup( ci::ivec2 renderSize, RendererRef sharedRenderer ) override;
@@ -103,7 +108,9 @@ private:
 private:
 	static thread_local RendererVk *sCurrentRenderer;
 
-	Options			 mOptions;
+	Options		   mOptions;
+	WindowImplMsw *mWindowImpl = nullptr;
+
 	vk::DeviceRef	 mDevice;
 	vk::ContextRef	 mContext;
 	vk::SwapchainRef mSwapchain;
